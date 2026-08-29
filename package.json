@@ -1,0 +1,31 @@
+{
+  "name": "slack-agy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "setup:host": "./scripts/setup-host.sh",
+    "deploy": "./scripts/deploy-systemd.sh",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint src",
+    "format": "oxfmt --write src",
+    "format:check": "oxfmt --check src"
+  },
+  "dependencies": {
+    "@slack/bolt": "3.21.4",
+    "dotenv": "16.4.7",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.0",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.79.0",
+    "tsx": "4.19.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

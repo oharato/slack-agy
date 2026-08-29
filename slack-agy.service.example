@@ -1,0 +1,28 @@
+[Unit]
+Description=Slack-AGY Bridge Service (Multi-user AI Agent Bridge)
+Documentation=https://github.com/your-org/slack-agy
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slack-agy
+Group=developers
+WorkingDirectory=/opt/slack-agy
+EnvironmentFile=/opt/slack-agy/.env
+ExecStart=/usr/bin/node /opt/slack-agy/dist/index.js
+Restart=always
+RestartSec=5s
+
+# セキュリティ & リソース制限
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slack-agy
+
+# 環境変数の安全なパス設定
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
