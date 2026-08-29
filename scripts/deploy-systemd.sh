@@ -26,11 +26,16 @@ fi
 sudo chown -R slack-agy:developers "${TARGET_DIR}"
 sudo chmod 775 "${TARGET_DIR}"
 
+NODE_BIN=$(which node)
+NODE_DIR=$(dirname "${NODE_BIN}")
+PNPM_BIN=$(which pnpm)
+AGY_BIN_DIR=$(dirname "$(which agy 2>/dev/null || echo '/usr/local/bin/agy')")
+SYSTEM_PATH="${NODE_DIR}:${AGY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin"
+
 echo "=== [3/5] Installing production dependencies in ${TARGET_DIR} ==="
-sudo -u slack-agy -H bash -c "cd '${TARGET_DIR}' && pnpm install --prod"
+sudo -u slack-agy -H env "PATH=${SYSTEM_PATH}" bash -c "cd '${TARGET_DIR}' && '${PNPM_BIN}' install --prod"
 
 echo "=== [4/5] Installing systemd service ==="
-NODE_PATH=$(which node)
 cat << EOF | sudo tee "${SERVICE_FILE}" > /dev/null
 [Unit]
 Description=Slack-AGY Bridge Service (Multi-user AI Agent Bridge)
@@ -43,7 +48,7 @@ User=slack-agy
 Group=developers
 WorkingDirectory=${TARGET_DIR}
 EnvironmentFile=${TARGET_DIR}/.env
-ExecStart=${NODE_PATH} ${TARGET_DIR}/dist/index.js
+ExecStart=${NODE_BIN} ${TARGET_DIR}/dist/index.js
 Restart=always
 RestartSec=5s
 
@@ -54,7 +59,7 @@ StandardError=journal
 SyslogIdentifier=${SERVICE_NAME}
 
 Environment=NODE_ENV=production
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=${SYSTEM_PATH}
 
 [Install]
 WantedBy=multi-user.target

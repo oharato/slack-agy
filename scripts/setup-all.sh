@@ -85,6 +85,12 @@ else
   exit 1
 fi
 
+NODE_BIN=$(which node)
+NODE_DIR=$(dirname "${NODE_BIN}")
+PNPM_BIN=$(which pnpm)
+AGY_BIN_DIR=$(dirname "$(which agy 2>/dev/null || echo '/usr/local/bin/agy')")
+SYSTEM_PATH="${NODE_DIR}:${AGY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin"
+
 # 4. ビルド & /opt/slack-agy へのデプロイ
 echo ""
 echo "▶ [5/6] Building & Deploying to ${TARGET_DIR}..."
@@ -101,15 +107,12 @@ sudo chmod 600 "${TARGET_DIR}/.env"
 sudo chown -R slack-agy:developers "${TARGET_DIR}"
 sudo chmod 775 "${TARGET_DIR}"
 
-sudo -u slack-agy -H bash -c "cd '${TARGET_DIR}' && pnpm install --prod"
+sudo -u slack-agy -H env "PATH=${SYSTEM_PATH}" bash -c "cd '${TARGET_DIR}' && '${PNPM_BIN}' install --prod"
 echo "✓ Deployed production build to ${TARGET_DIR}"
 
 # 5. systemd サービス登録 & 起動
 echo ""
 echo "▶ [6/6] Installing & Starting systemd Service..."
-NODE_BIN=$(which node)
-AGY_BIN_DIR=$(dirname "$(which agy 2>/dev/null || echo '/usr/local/bin/agy')")
-SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin:${AGY_BIN_DIR}"
 
 cat << EOF | sudo tee "${SERVICE_FILE}" > /dev/null
 [Unit]
