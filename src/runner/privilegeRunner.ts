@@ -159,18 +159,28 @@ export class PrivilegeRunner {
       parser.on("event", (event: AgyEvent) => {
         if (onEvent) onEvent(event);
 
-        if (event.conversation_id) {
-          capturedConvId = event.conversation_id;
+        const convId =
+          event.conversation_id ||
+          event.result?.conversation_id ||
+          event.step_update?.conversation_id ||
+          event.init?.conversation_id;
+        if (convId) {
+          capturedConvId = convId;
         }
 
-        // Reasoning
-        if (event.reasoning || event.thinking) {
-          const reasoning = (event.reasoning || event.thinking) as string;
-          if (onReasoning) onReasoning(reasoning);
+        // Reasoning / Thinking
+        const thinkingText =
+          event.step_update?.thinking ||
+          (typeof event.thinking === "string" ? event.thinking : undefined) ||
+          (typeof event.reasoning === "string" ? event.reasoning : undefined);
+        if (thinkingText && onReasoning) {
+          onReasoning(thinkingText);
         }
 
         // Tool Calls
-        if (event.tool_name) {
+        if (event.step_update?.tool_call?.name) {
+          if (onToolCall) onToolCall(event.step_update.tool_call.name, event.step_update.tool_call.arguments);
+        } else if (event.tool_name) {
           if (onToolCall) onToolCall(event.tool_name, event);
         } else if (event.tool_calls && event.tool_calls.length > 0) {
           for (const tc of event.tool_calls) {
@@ -178,18 +188,23 @@ export class PrivilegeRunner {
           }
         }
 
-        // Progress text
-        if (event.content || event.response) {
-          const content = (event.content || event.response) as string;
-          if (onProgress) onProgress(content);
+        // Progress text / Streaming text
+        const textChunk =
+          event.step_update?.text_delta ||
+          (typeof event.content === "string" ? event.content : undefined) ||
+          (typeof event.response === "string" ? event.response : undefined);
+        if (textChunk) {
+          if (onProgress) onProgress(textChunk);
         }
 
         // Result event
-        if (event.event === "result" || event.status === "SUCCESS" || event.status === "ERROR") {
-          if (event.response) {
-            finalResponse = event.response;
+        if (event.event === "result" || event.result) {
+          const resp = event.result?.response || event.response;
+          if (resp) {
+            finalResponse = resp;
           }
-          if (event.status === "ERROR") {
+          const resStatus = event.result?.status || event.status;
+          if (resStatus === "ERROR") {
             finalStatus = "ERROR";
             errorMessage = event.error?.message || "AGY execution returned error";
           }

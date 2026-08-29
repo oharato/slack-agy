@@ -252,12 +252,15 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
         });
 
         if (chunked.type === "file") {
-          // 進捗メッセージを更新
-          await client.chat.update({
-            channel: channelId,
-            ts: progressMsgTs,
-            text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n文字数制限超過のため結果をファイル添付しました。`,
-          });
+          try {
+            await client.chat.update({
+              channel: channelId,
+              ts: progressMsgTs,
+              text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n文字数制限超過のため結果をファイル添付しました。`,
+            });
+          } catch {
+            // ignore
+          }
 
           // files.uploadV2 でスニペットファイルをアップロード
           await client.files.uploadV2({
@@ -268,12 +271,20 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
             title: chunked.title,
           });
         } else {
-          // 通常のメッセージとして進捗メッセージを上書き更新
-          await client.chat.update({
-            channel: channelId,
-            ts: progressMsgTs,
-            text: formattedResult,
-          });
+          try {
+            await client.chat.update({
+              channel: channelId,
+              ts: progressMsgTs,
+              text: formattedResult,
+            });
+          } catch (updateErr) {
+            logger.warn("failed_to_update_progress_msg_posting_new", { error: String(updateErr) });
+            await client.chat.postMessage({
+              channel: channelId,
+              thread_ts: threadTs,
+              text: formattedResult,
+            });
+          }
         }
       } catch (err) {
         throttler.cancel();

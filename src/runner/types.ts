@@ -1,16 +1,43 @@
 import { ChildProcess } from "node:child_process";
 
 export type AgyEventType =
-  | "step_start"
+  | "init"
   | "step_update"
-  | "reasoning"
-  | "tool_call"
   | "result"
   | "error"
   | "unknown";
 
 export interface AgyEvent {
   event: string;
+  conversation_id?: string;
+  init?: {
+    cwd?: string;
+    tools?: string[];
+    permission_mode?: string;
+    conversation_id?: string;
+  };
+  step_update?: {
+    conversation_id?: string;
+    step_index?: number;
+    state?: string;
+    step_type?: string;
+    text_delta?: string;
+    thinking?: string;
+    tool_call?: {
+      name: string;
+      arguments?: Record<string, unknown>;
+    };
+    [key: string]: unknown;
+  };
+  result?: {
+    conversation_id?: string;
+    status?: "SUCCESS" | "ERROR" | string;
+    response?: string;
+    duration_seconds?: number;
+    num_turns?: number;
+    [key: string]: unknown;
+  };
+  // フラットなフォールバック用プロパティ
   step_index?: number;
   type?: string;
   status?: "SUCCESS" | "ERROR" | "RUNNING" | string;
@@ -23,7 +50,6 @@ export interface AgyEvent {
     name: string;
     arguments?: Record<string, unknown>;
   }>;
-  conversation_id?: string;
   error?: {
     message?: string;
     code?: string | number;

@@ -179,11 +179,15 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
         });
 
         if (chunked.type === "file") {
-          await client.chat.update({
-            channel: channelId,
-            ts: progressMsgTs,
-            text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n文字数制限超過のため結果をファイル添付しました。`,
-          });
+          try {
+            await client.chat.update({
+              channel: channelId,
+              ts: progressMsgTs,
+              text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n文字数制限超過のため結果をファイル添付しました。`,
+            });
+          } catch {
+            // ignore
+          }
 
           await client.files.uploadV2({
             channel_id: channelId,
@@ -193,11 +197,20 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
             title: chunked.title,
           });
         } else {
-          await client.chat.update({
-            channel: channelId,
-            ts: progressMsgTs,
-            text: formattedResult,
-          });
+          try {
+            await client.chat.update({
+              channel: channelId,
+              ts: progressMsgTs,
+              text: formattedResult,
+            });
+          } catch (updateErr) {
+            logger.warn("failed_to_update_progress_msg_posting_new", { error: String(updateErr) });
+            await client.chat.postMessage({
+              channel: channelId,
+              thread_ts: effectiveThreadTs,
+              text: formattedResult,
+            });
+          }
         }
       } catch (err) {
         throttler.cancel();
