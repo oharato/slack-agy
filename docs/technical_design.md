@@ -218,7 +218,7 @@ export class RepoMutex {
 
 ---
 
-## 5. Slack API レート制限 & 4,000文字フォールバック設計
+## 5. Slack API レート制限 & Block Kit Markdown フォーマット設計
 
 ### 5.1 進捗更新のスロットリング / デバウンス (`ProgressThrottler`)
 AGY の高速なストリーミングイベント（NDJSON）に対して毎回 `chat.update` を呼び出すと、Slack API の Rate Limit（Tier 3 / 1秒1回のスレッド更新制限）により HTTP 429 Too Many Requests が発生します。
@@ -233,8 +233,38 @@ export class ProgressThrottler {
 }
 ```
 
-### 5.2 4,000 文字制限対策 & ファイル自動フォールバック (`MessageChunker`)
-Slack のメッセージ文字数制限（4,000文字）を超える長い AGY レスポンスや Git diff は、本文での切り捨てを防止し、自動的に `files.uploadV2` を用いてスニペットファイル（例: `diff.patch`, `output.txt`）としてスレッドにアップロードします。
+### 5.2 Slack Block Kit Markdown ブロック (`type: "markdown"`) によるリッチ表示
+従来の Slack mrkdwn では Markdown の表（テーブル）が非対応でプレーンテキスト化していましたが、最新の Slack Block Kit **Markdown ブロック (`type: "markdown"`)** を採用することで、表（Table）、言語別コードハイライト、タスクリスト、見出しをネイティブに描画します。
+
+```typescript
+export class SlackFormatter {
+  public static formatResultBlocks(params: FormatResultParams): {
+    text: string;
+    blocks: Array<Record<string, unknown>>;
+  } {
+    // 1. Markdown 最適化 (file:/// リンクのインラインコード化等)
+    const preparedMarkdown = this.prepareMarkdownForSlack(params.response.trim());
+    
+    // 2. テーブルやコードブロックを途中で切らない構造認識チャンク分割
+    const bodyChunks = MessageChunker.splitIntoMarkdownChunks(preparedMarkdown, 3000);
+    const blocks = bodyChunks.map((chunk) => ({
+      type: "markdown",
+      text: chunk,
+    }));
+
+    // 3. メタ情報 context ブロックを付与
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `${metaLine}${prHint}` }],
+    });
+
+    return { text: fullText, blocks };
+  }
+}
+```
+
+### 5.3 10,000 文字制限対策 & ファイル自動フォールバック (`MessageChunker`)
+Slack Markdown ブロックのメッセージ上限（累計 12,000 文字）に基づき、10,000文字まではスレッド内に直接リッチ描画し、それを超える巨大ログや大差分は `files.uploadV2` を用いてスニペットファイル（例: `diff.patch`, `output.txt`）としてスレッドに添付します。
 
 ---
 

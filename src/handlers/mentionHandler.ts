@@ -82,7 +82,8 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
 
     // 4. 自然言語プロンプトおよびリポジトリ指定の抽出
     const rawPrompt = text.replace(/<@[A-Z0-9]+>/g, "").trim();
-    const { repoNameOrUrl: specifiedRepo, cleanedPrompt: prompt } = extractRepoFromPrompt(rawPrompt);
+    const { repoNameOrUrl: specifiedRepo, cleanedPrompt: prompt } =
+      extractRepoFromPrompt(rawPrompt);
 
     // 5. セッション & Worktree の確認と準備
     let session = sessionStore.getSessionByThread(channelId, threadTs);
@@ -92,7 +93,11 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
       if (!session || (specifiedRepo && session.repoName !== specifiedRepo)) {
         if (repoTarget) {
           // リポジトリ指定あり: Git Worktree を作成
-          const { repoName } = await worktreeManager.ensureRepo(repoTarget, osUser, config.DEFAULT_BASE_BRANCH);
+          const { repoName } = await worktreeManager.ensureRepo(
+            repoTarget,
+            osUser,
+            config.DEFAULT_BASE_BRANCH,
+          );
           const safeKey = threadTs.replace(/[^a-zA-Z0-9_-]/g, "_");
           const branchName = `feat/${osUser}-thread-${safeKey}`;
           const threadKey = `${channelId}:${threadTs}`;

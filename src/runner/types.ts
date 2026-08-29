@@ -1,11 +1,6 @@
 import { ChildProcess } from "node:child_process";
 
-export type AgyEventType =
-  | "init"
-  | "step_update"
-  | "result"
-  | "error"
-  | "unknown";
+export type AgyEventType = "init" | "step_update" | "result" | "error" | "unknown";
 
 export interface AgyEvent {
   event: string;

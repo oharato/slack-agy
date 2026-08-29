@@ -12,7 +12,8 @@ export interface FormatResultParams {
 
 export class SlackFormatter {
   /**
-   * AGY 実行結果メッセージを Slack Block Kit (section + mrkdwn 形式) でフォーマット
+   * AGY 実行結果メッセージを Slack Block Kit (Slack公式 markdown ブロック形式) でフォーマット
+   * 表 (GFM Table)、コードハイライト、タスクリスト、見出しがネイティブ描画されます。
    */
   public static formatResultBlocks(params: FormatResultParams): {
     text: string;
@@ -35,17 +36,14 @@ export class SlackFormatter {
         ? "\n💡 `!pr [タイトル]` で GitHub に Pull Request を作成できます。"
         : "";
 
-    const formattedBody = this.markdownToMrkdwn(params.response.trim());
-    const fullText = `${formattedBody}\n\n────────────────────────────────────\n${metaLine}${prHint}`;
+    const preparedMarkdown = this.prepareMarkdownForSlack(params.response.trim());
+    const fullText = `${preparedMarkdown}\n\n────────────────────────────────────\n${metaLine}${prHint}`;
 
-    // 2,500文字ごとに section ブロックに安全分割 (Slack section 上限 3,000 文字)
-    const bodyChunks = MessageChunker.splitIntoChunks(formattedBody, 2500);
+    // 3,000文字ごとに markdown ブロックに安全分割 (テーブルやコードブロックを途中で切らない分割)
+    const bodyChunks = MessageChunker.splitIntoMarkdownChunks(preparedMarkdown, 3000);
     const blocks: Array<Record<string, unknown>> = bodyChunks.map((chunk) => ({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: chunk,
-      },
+      type: "markdown",
+      text: chunk,
     }));
 
     // メタ情報コンテキストブロック
@@ -81,8 +79,8 @@ export class SlackFormatter {
     }
 
     const divider = "────────────────────────────────────";
-    const formattedBody = this.markdownToMrkdwn(params.response.trim());
-    const lines = [formattedBody, "", divider, metaParts.join(" | ")];
+    const preparedMarkdown = this.prepareMarkdownForSlack(params.response.trim());
+    const lines = [preparedMarkdown, "", divider, metaParts.join(" | ")];
 
     if (params.showPrHint !== false) {
       lines.push("💡 `!pr [タイトル]` で GitHub に Pull Request を作成できます。");
@@ -92,7 +90,78 @@ export class SlackFormatter {
   }
 
   /**
-   * 標準 Markdown (CommonMark/GFM) を Slack の mrkdwn 構文に変換
+   * Slack 公式 Markdown ブロック向けに Markdown を最適化
+   * - テーブル (Table) や見出し、コードブロック、タスクリスト、太字などは標準 Markdown のまま保持
+   * - file:/// リンクを読みやすいインラインコード形式に変換
+   * - GitHub Alert 記法 (> [!NOTE] 等) を絵文字付き引用に変換
+   */
+  public static prepareMarkdownForSlack(text: string): string {
+    if (!text) return "";
+
+    // 1. コードブロック (```lang ... ```) を安全なプレースホルダに退避
+    const codeBlocks: string[] = [];
+    let converted = text.replace(/```([\s\S]*?)```/g, (match) => {
+      codeBlocks.push(match);
+      return `@@SLACKCODEBLOCKTOKEN##${codeBlocks.length - 1}@@`;
+    });
+
+    // 2. インラインコード (`...`) を安全なプレースホルダに退避
+    const inlineCodes: string[] = [];
+    converted = converted.replace(/`([^`\n]+)`/g, (match) => {
+      inlineCodes.push(match);
+      return `@@SLACKINLINETOKEN##${inlineCodes.length - 1}@@`;
+    });
+
+    // 3. 太字付きローカルファイルリンク **[Title](file:///...)** の先行変換
+    converted = converted.replace(
+      /\*\*\[([^\]]+)\]\(file:\/\/\/([^)]+)\)\*\*/g,
+      (_match, label, filePath) => {
+        const parts = filePath.split("/");
+        const fileName = parts[parts.length - 1] || filePath;
+        if (label === fileName || label.includes(fileName)) {
+          return `**\`${label}\`**`;
+        }
+        return `**${label}** (\`${fileName}\`)`;
+      },
+    );
+
+    // 4. 通常のローカルファイルリンク [Title](file:///path/to/file.ext) の変換
+    converted = converted.replace(
+      /\[([^\]]+)\]\(file:\/\/\/([^)]+)\)/g,
+      (_match, label, filePath) => {
+        const parts = filePath.split("/");
+        const fileName = parts[parts.length - 1] || filePath;
+        if (label === fileName || label.includes(fileName)) {
+          return `\`${label}\``;
+        }
+        return `${label} (\`${fileName}\`)`;
+      },
+    );
+
+    // 5. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
+    converted = converted.replace(
+      /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gim,
+      (_m, type, rest) => {
+        const icon =
+          type.toUpperCase() === "WARNING" || type.toUpperCase() === "CAUTION" ? "⚠️" : "💡";
+        return `> ${icon} **[${type.toUpperCase()}]** ${rest}`;
+      },
+    );
+
+    // 6. インラインコードとコードブロックを安全に復元
+    converted = converted.replace(/@@SLACKINLINETOKEN##(\d+)@@/g, (_match, idx) => {
+      return inlineCodes[Number(idx)] || "";
+    });
+
+    converted = converted.replace(/@@SLACKCODEBLOCKTOKEN##(\d+)@@/g, (_match, idx) => {
+      return codeBlocks[Number(idx)] || "";
+    });
+
+    return converted;
+  }
+
+  /**
+   * 標準 Markdown (CommonMark/GFM) を従来の Slack mrkdwn 構文に変換（互換性用）
    */
   public static markdownToMrkdwn(text: string): string {
     if (!text) return "";
@@ -101,14 +170,14 @@ export class SlackFormatter {
     const codeBlocks: string[] = [];
     let converted = text.replace(/```([\s\S]*?)```/g, (match) => {
       codeBlocks.push(match);
-      return `\u0001CODEBLOCK_${codeBlocks.length - 1}\u0002`;
+      return `@@SLACKCODEBLOCKTOKEN##${codeBlocks.length - 1}@@`;
     });
 
     // 2. インラインコード (`...`) を安全なプレースホルダに退避
     const inlineCodes: string[] = [];
     converted = converted.replace(/`([^`\n]+)`/g, (match) => {
       inlineCodes.push(match);
-      return `\u0001INLINECODE_${inlineCodes.length - 1}\u0002`;
+      return `@@SLACKINLINETOKEN##${inlineCodes.length - 1}@@`;
     });
 
     // 3. 太字付きローカルファイルリンク **[Title](file:///...)** の先行変換
@@ -167,7 +236,14 @@ export class SlackFormatter {
         const indentMatch = line.match(/^(\s*)/);
         const indent = indentMatch ? indentMatch[1] : "";
         const rest = line.slice(indent.length);
-        return indent + rest.replace(/ {2,}/g, " ").replace(/\* : /g, "*: ").replace(/\* :(\s)/g, "*:$1").trimEnd();
+        return (
+          indent +
+          rest
+            .replace(/ {2,}/g, " ")
+            .replace(/\* : /g, "*: ")
+            .replace(/\* :(\s)/g, "*:$1")
+            .trimEnd()
+        );
       })
       .join("\n");
 
@@ -175,7 +251,8 @@ export class SlackFormatter {
     converted = converted.replace(
       /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gim,
       (_m, type, rest) => {
-        const icon = type.toUpperCase() === "WARNING" || type.toUpperCase() === "CAUTION" ? "⚠️" : "💡";
+        const icon =
+          type.toUpperCase() === "WARNING" || type.toUpperCase() === "CAUTION" ? "⚠️" : "💡";
         return `> ${icon} *[${type.toUpperCase()}]* ${rest}`;
       },
     );
@@ -187,11 +264,11 @@ export class SlackFormatter {
     converted = converted.replace(/^(\s*)[-+*]\s+(.+)$/gm, "$1• $2");
 
     // 14. インラインコードとコードブロックを安全に復元
-    converted = converted.replace(/\u0001INLINECODE_(\d+)\u0002/g, (_match, idx) => {
+    converted = converted.replace(/@@SLACKINLINETOKEN##(\d+)@@/g, (_match, idx) => {
       return inlineCodes[Number(idx)] || "";
     });
 
-    converted = converted.replace(/\u0001CODEBLOCK_(\d+)\u0002/g, (_match, idx) => {
+    converted = converted.replace(/@@SLACKCODEBLOCKTOKEN##(\d+)@@/g, (_match, idx) => {
       return codeBlocks[Number(idx)] || "";
     });
 

@@ -181,9 +181,7 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
 
         const chunked = MessageChunker.processMessage(formattedBlocks.text, {
           defaultFilename: "agy_result.txt",
-          title: session.branchName
-            ? `AGY 実行結果 (${session.branchName})`
-            : "AGY 実行結果",
+          title: session.branchName ? `AGY 実行結果 (${session.branchName})` : "AGY 実行結果",
         });
 
         if (chunked.type === "file") {

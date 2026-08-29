@@ -51,8 +51,15 @@ describe("MessageChunker", () => {
     expect(result.content).toBe("Short message");
   });
 
-  it("should convert long messages (>3800 chars) to file upload type", () => {
-    const longText = "A".repeat(5000);
+  it("should support messages up to 10,000 characters as text", () => {
+    const text8k = "A".repeat(8000);
+    const result = MessageChunker.processMessage(text8k);
+    expect(result.type).toBe("text");
+    expect(result.content.length).toBe(8000);
+  });
+
+  it("should convert long messages (>10000 chars) to file upload type", () => {
+    const longText = "A".repeat(12000);
     const result = MessageChunker.processMessage(longText, {
       defaultFilename: "diff.patch",
       title: "Git Diff",
@@ -60,7 +67,8 @@ describe("MessageChunker", () => {
 
     expect(result.type).toBe("file");
     expect(result.filename).toBe("diff.patch");
-    expect(result.content.length).toBe(5000);
+    expect(result.content.length).toBe(12000);
+    expect(result.previewText).toContain("...（省略");
   });
 
   it("should split long content into chunks", () => {
@@ -68,6 +76,30 @@ describe("MessageChunker", () => {
     const chunks = MessageChunker.splitIntoChunks(text, 15);
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.join("\n")).toBe(text);
+  });
+
+  it("should split markdown into chunks without breaking tables or code blocks", () => {
+    const tableMd = [
+      "# Header",
+      "",
+      "| Col1 | Col2 |",
+      "| ---- | ---- |",
+      "| Val1 | Val2 |",
+      "| Val3 | Val4 |",
+      "",
+      "```python",
+      "def test():",
+      "    return True",
+      "```",
+    ].join("\n");
+
+    const chunks = MessageChunker.splitIntoMarkdownChunks(tableMd, 50);
+    expect(chunks.length).toBeGreaterThan(1);
+    // テーブル行が途中で欠けずに含まれていること
+    const tableChunk = chunks.find((c) => c.includes("| Col1 | Col2 |"));
+    expect(tableChunk).toBeDefined();
+    expect(tableChunk).toContain("| Val1 | Val2 |");
+    expect(tableChunk).toContain("| Val3 | Val4 |");
   });
 });
 
@@ -93,20 +125,64 @@ describe("ProgressCard", () => {
 });
 
 describe("SlackFormatter", () => {
-  it("should format execution results with metadata and footer", () => {
-    const formatted = SlackFormatter.formatResult({
-      response: "Tests passed successfully.",
+  it("should format execution results with Slack Block Kit markdown blocks (enabling tables)", () => {
+    const tableResponse = [
+      "## 実行結果サマリー",
+      "",
+      "| 項目 | ステータス | 備考 |",
+      "| :--- | :--- | :--- |",
+      "| 単体テスト | ✅ 成功 (Pass) | 10/10 通過 |",
+      "| テーブル表示 | 🟢 対応 | Block Kit markdown ブロック利用 |",
+      "",
+      "### シンタックスハイライト",
+      "```python",
+      "def hello():",
+      "    print('Hello Slack Markdown!')",
+      "```",
+      "",
+      "### タスクリスト",
+      "- [x] Markdownブロックの導入",
+      "- [ ] 動作確認",
+      "",
+      "> [!TIP] プレビューサーバーで Markdown を閲覧できます。",
+    ].join("\n");
+
+    const result = SlackFormatter.formatResultBlocks({
+      response: tableResponse,
       osUser: "bob",
       durationMs: 14200,
-      branchName: "feat/api",
+      branchName: "feat/table-display",
       conversationId: "conv_123456789",
     });
 
-    expect(formatted).toContain("Tests passed successfully.");
-    expect(formatted).toContain("👤 実行者: `bob`");
-    expect(formatted).toContain("⏱️ 14.2s");
-    expect(formatted).toContain("🌿 `feat/api`");
-    expect(formatted).toContain("💡 `!pr [タイトル]`");
+    expect(result.blocks.length).toBeGreaterThan(0);
+
+    // 先頭ブロックが type: "markdown" であること
+    const firstBlock = result.blocks[0];
+    expect(firstBlock.type).toBe("markdown");
+    const markdownContent = firstBlock.text as string;
+
+    // テーブル構文がそのまま保持されていること
+    expect(markdownContent).toContain("| 項目 | ステータス | 備考 |");
+    expect(markdownContent).toContain("| 単体テスト | ✅ 成功 (Pass) | 10/10 通過 |");
+
+    // シンタックスハイライト、タスクリスト、見出しが保持されていること
+    expect(markdownContent).toContain("## 実行結果サマリー");
+    expect(markdownContent).toContain("```python");
+    expect(markdownContent).toContain("- [x] Markdownブロックの導入");
+    expect(markdownContent).toContain("- [ ] 動作確認");
+    expect(markdownContent).toContain(
+      "💡 **[TIP]** プレビューサーバーで Markdown を閲覧できます。",
+    );
+
+    // メタ情報の context ブロックが付与されていること
+    const lastBlock = result.blocks[result.blocks.length - 1];
+    expect(lastBlock.type).toBe("context");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contextText = (lastBlock.elements as any[])[0].text;
+    expect(contextText).toContain("👤 実行者: `bob`");
+    expect(contextText).toContain("⏱️ 14.2s");
+    expect(contextText).toContain("🌿 `feat/table-display`");
   });
 
   it("should format help and status text", () => {
@@ -122,7 +198,22 @@ describe("SlackFormatter", () => {
     expect(unauth).toContain("SLACK_USER_OS_MAPPINGS");
   });
 
-  it("should convert markdown to Slack mrkdwn", () => {
+  it("should optimize local file links in prepareMarkdownForSlack while keeping markdown structure", () => {
+    const md = [
+      "# Header 1",
+      "| ファイル | 概要 |",
+      "| --- | --- |",
+      "| [README.md](file:///path/to/repo/README.md) | 説明書 |",
+      "| **[docs.md](file:///path/to/repo/docs.md)** | 詳細仕様 |",
+    ].join("\n");
+
+    const prepared = SlackFormatter.prepareMarkdownForSlack(md);
+    expect(prepared).toContain("| `README.md` | 説明書 |");
+    expect(prepared).toContain("| **`docs.md`** | 詳細仕様 |");
+    expect(prepared).toContain("# Header 1");
+  });
+
+  it("should convert markdown to Slack mrkdwn for legacy compatibility", () => {
     const md = [
       "# Header 1",
       "## Header 2",

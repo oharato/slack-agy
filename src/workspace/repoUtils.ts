@@ -67,7 +67,11 @@ export function parseRepoTarget(input: string): { repoName: string; cloneUrl: st
   const sanitized = sanitizeSlackLink(input.trim());
 
   // URL 形式: https://github.com/owner/repo or git@github.com:owner/repo.git
-  if (sanitized.includes("github.com") || sanitized.includes("://") || sanitized.startsWith("git@")) {
+  if (
+    sanitized.includes("github.com") ||
+    sanitized.includes("://") ||
+    sanitized.startsWith("git@")
+  ) {
     const match = sanitized.match(/\/([^/]+?)(?:\.git)?$/);
     const repoName = match ? match[1] : sanitized.replace(/[^a-zA-Z0-9_.-]/g, "_");
     return { repoName, cloneUrl: sanitized };

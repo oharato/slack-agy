@@ -16,7 +16,7 @@ export class PrivilegeRunner {
 
   constructor(options: PrivilegeRunnerOptions = {}) {
     this.agyPath = options.agyPath ?? "agy";
-    this.useSudo = options.useSudo ?? (process.env.NODE_ENV !== "test");
+    this.useSudo = options.useSudo ?? process.env.NODE_ENV !== "test";
   }
 
   /**
@@ -29,7 +29,7 @@ export class PrivilegeRunner {
       osUser,
       conversationId,
       timeoutMs = 600000, // 10 minutes
-      useSudo = (this.useSudo && Boolean(osUser && osUser !== process.env.USER)),
+      useSudo = this.useSudo && Boolean(osUser && osUser !== process.env.USER),
       onEvent,
       onProgress,
       onReasoning,
@@ -47,7 +47,7 @@ export class PrivilegeRunner {
     let cmd = this.agyPath;
     let spawnArgs = args;
 
-    const userHome = osUser ? `/home/${osUser}` : (process.env.HOME || "/root");
+    const userHome = osUser ? `/home/${osUser}` : process.env.HOME || "/root";
     const userPath = `${userHome}/.local/bin:${userHome}/.local/share/mise/shims:${userHome}/.cargo/bin:/usr/local/bin:/usr/bin:/bin`;
 
     if (useSudo && osUser) {
@@ -195,7 +195,8 @@ export class PrivilegeRunner {
 
         // Tool Calls
         if (event.step_update?.tool_call?.name) {
-          if (onToolCall) onToolCall(event.step_update.tool_call.name, event.step_update.tool_call.arguments);
+          if (onToolCall)
+            onToolCall(event.step_update.tool_call.name, event.step_update.tool_call.arguments);
         } else if (event.tool_name) {
           if (onToolCall) onToolCall(event.tool_name, event);
         } else if (event.tool_calls && event.tool_calls.length > 0) {

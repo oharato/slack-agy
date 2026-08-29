@@ -8,7 +8,8 @@ describe("repoUtils", () => {
   });
 
   it("should extract repo from Slack link containing github URL", () => {
-    const text = "<https://github.com/oharato/docs-repo|github.com/oharato/docs-repo> 最近のナレッジは？";
+    const text =
+      "<https://github.com/oharato/docs-repo|github.com/oharato/docs-repo> 最近のナレッジは？";
     const result = extractRepoFromPrompt(text);
 
     expect(result.repoNameOrUrl).toBe("https://github.com/oharato/docs-repo");
@@ -16,7 +17,8 @@ describe("repoUtils", () => {
   });
 
   it("should extract repo from repo: prefix with slack link or plain text", () => {
-    const text1 = "repo:<https://github.com/oharato/docs-repo|github.com/oharato/docs-repo> 調査して";
+    const text1 =
+      "repo:<https://github.com/oharato/docs-repo|github.com/oharato/docs-repo> 調査して";
     const res1 = extractRepoFromPrompt(text1);
     expect(res1.repoNameOrUrl).toBe("https://github.com/oharato/docs-repo");
     expect(res1.cleanedPrompt).toBe("調査して");

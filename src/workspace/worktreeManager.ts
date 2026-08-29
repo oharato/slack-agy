@@ -82,7 +82,11 @@ export class WorktreeManager {
         let lastError: unknown;
 
         // 1. URL または owner/repo の場合
-        if (cloneUrl.startsWith("http://") || cloneUrl.startsWith("https://") || cloneUrl.startsWith("git@")) {
+        if (
+          cloneUrl.startsWith("http://") ||
+          cloneUrl.startsWith("https://") ||
+          cloneUrl.startsWith("git@")
+        ) {
           try {
             await execCommandAsUser("git", ["clone", cloneUrl, baseRepoPath], {
               osUser,
@@ -100,13 +104,17 @@ export class WorktreeManager {
               useSudo: this.useSudo,
             });
             cloneSuccess = true;
-          } catch (err) {
+          } catch {
             // gh clone が失敗した場合、https://github.com/owner/repo を試す
             try {
-              await execCommandAsUser("git", ["clone", `https://github.com/${cloneUrl}.git`, baseRepoPath], {
-                osUser,
-                useSudo: this.useSudo,
-              });
+              await execCommandAsUser(
+                "git",
+                ["clone", `https://github.com/${cloneUrl}.git`, baseRepoPath],
+                {
+                  osUser,
+                  useSudo: this.useSudo,
+                },
+              );
               cloneSuccess = true;
             } catch (gitErr) {
               lastError = gitErr;
@@ -128,7 +136,10 @@ export class WorktreeManager {
         if (!cloneSuccess) {
           // テスト環境や明示的なローカルリポジトリ作成用フォールバック
           if (process.env.NODE_ENV === "test") {
-            logger.warn("clone_failed_attempting_local_init", { repoName, error: String(lastError) });
+            logger.warn("clone_failed_attempting_local_init", {
+              repoName,
+              error: String(lastError),
+            });
             fs.mkdirSync(baseRepoPath, { recursive: true });
             await execCommandAsUser("git", ["init", "-b", defaultBranch, baseRepoPath], {
               osUser,
@@ -136,7 +147,9 @@ export class WorktreeManager {
             });
           } else {
             const errorMsg = lastError instanceof Error ? lastError.message : String(lastError);
-            throw new Error(`リポジトリ '${repoNameOrUrl}' のクローンに失敗しました。\nGitHub URL（例: https://github.com/owner/repo）を指定するか、リポジトリが存在すること・アクセス権限があることを確認してください。\n詳細: ${errorMsg}`);
+            throw new Error(
+              `リポジトリ '${repoNameOrUrl}' のクローンに失敗しました。\nGitHub URL（例: https://github.com/owner/repo）を指定するか、リポジトリが存在すること・アクセス権限があることを確認してください。\n詳細: ${errorMsg}`,
+            );
           }
         }
 
