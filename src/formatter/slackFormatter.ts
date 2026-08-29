@@ -1,4 +1,5 @@
 import { SessionInfo } from "../session/types.js";
+import { MessageChunker } from "./messageChunker.js";
 
 export interface FormatResultParams {
   response: string;
@@ -11,7 +12,7 @@ export interface FormatResultParams {
 
 export class SlackFormatter {
   /**
-   * AGY 実行結果メッセージを Slack Block Kit (ネイティブ markdown ブロック) 形式でフォーマット
+   * AGY 実行結果メッセージを Slack Block Kit (section + mrkdwn 形式) でフォーマット
    */
   public static formatResultBlocks(params: FormatResultParams): {
     text: string;
@@ -34,32 +35,38 @@ export class SlackFormatter {
         ? "\n💡 `!pr [タイトル]` で GitHub に Pull Request を作成できます。"
         : "";
 
-    const rawMarkdown = params.response.trim();
+    const formattedBody = this.markdownToMrkdwn(params.response.trim());
+    const fullText = `${formattedBody}\n\n────────────────────────────────────\n${metaLine}${prHint}`;
 
-    const blocks: Array<Record<string, unknown>> = [
-      {
-        type: "markdown",
-        text: rawMarkdown,
+    // 2,500文字ごとに section ブロックに安全分割 (Slack section 上限 3,000 文字)
+    const bodyChunks = MessageChunker.splitIntoChunks(formattedBody, 2500);
+    const blocks: Array<Record<string, unknown>> = bodyChunks.map((chunk) => ({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: chunk,
       },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: `${metaLine}${prHint}`,
-          },
-        ],
-      },
-    ];
+    }));
+
+    // メタ情報コンテキストブロック
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `${metaLine}${prHint}`,
+        },
+      ],
+    });
 
     return {
-      text: `${rawMarkdown}\n\n${metaLine}${prHint}`,
+      text: fullText,
       blocks,
     };
   }
 
   /**
-   * AGY 実行結果メッセージをプレーンテキスト/フォールバック用にフォーマット
+   * AGY 実行結果メッセージをプレーンテキスト用にフォーマット
    */
   public static formatResult(params: FormatResultParams): string {
     const durationSec = (params.durationMs / 1000).toFixed(1);
@@ -74,7 +81,8 @@ export class SlackFormatter {
     }
 
     const divider = "────────────────────────────────────";
-    const lines = [params.response.trim(), "", divider, metaParts.join(" | ")];
+    const formattedBody = this.markdownToMrkdwn(params.response.trim());
+    const lines = [formattedBody, "", divider, metaParts.join(" | ")];
 
     if (params.showPrHint !== false) {
       lines.push("💡 `!pr [タイトル]` で GitHub に Pull Request を作成できます。");
@@ -84,7 +92,7 @@ export class SlackFormatter {
   }
 
   /**
-   * 標準 Markdown (CommonMark/GFM) を Slack 特有の mrkdwn 構文に変換
+   * 標準 Markdown (CommonMark/GFM) を Slack の mrkdwn 構文に変換
    */
   public static markdownToMrkdwn(text: string): string {
     if (!text) return "";
@@ -103,14 +111,28 @@ export class SlackFormatter {
       return `__INLINE_CODE_${inlineCodes.length - 1}__`;
     });
 
-    // 3. 見出し (# Header, ## Header, ### Header) -> *Header*
+    // 3. ローカルファイルリンク [Title](file:///path/to/file.ext) の変換
+    converted = converted.replace(/\[([^\]]+)\]\(file:\/\/\/([^)]+)\)/g, (_match, label, filePath) => {
+      // ファイル名のみまたは末尾のパスを抽出
+      const parts = filePath.split("/");
+      const fileName = parts[parts.length - 1] || filePath;
+      if (label === fileName || label.includes(fileName)) {
+        return `\`${label}\``;
+      }
+      return `*${label}* (\`${fileName}\`)`;
+    });
+
+    // 4. Web リンク [Title](https://...) の変換 -> <https://...|Title>
+    converted = converted.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "<$2|$1>");
+
+    // 5. 見出し (# Header, ## Header, ### Header) -> *Header*
     converted = converted.replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
 
-    // 4. 太字 (**bold** または __bold__) -> *bold*
-    converted = converted.replace(/\*\*([^*]+)\*\*/g, "*$1*");
-    converted = converted.replace(/__([^_]+)__/g, "*$1*");
+    // 6. 太字 (**bold** または __bold__) -> *bold*
+    converted = converted.replace(/\*\*([^*\n]+)\*\*/g, "*$1*");
+    converted = converted.replace(/__([^_\n]+)__/g, "*$1*");
 
-    // 5. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
+    // 7. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
     converted = converted.replace(
       /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gim,
       (_m, type, rest) => {
@@ -119,28 +141,13 @@ export class SlackFormatter {
       },
     );
 
-    // 6. Markdown リンク [title](url) -> <url|title>
-    // file:/// スキームの場合はローカルパス表示に変換
-    converted = converted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
-      if (url.startsWith("file:///")) {
-        // file:///var/workspace/shared/worktrees/... などの長いパスを相対パス風に短縮
-        const cleanPath = url.replace(/^file:\/\/\/?/, "");
-        const shortPath = cleanPath.split("/worktrees/")[1] || cleanPath.split("/workspace/")[1] || cleanPath;
-        if (label === shortPath || label.includes(shortPath)) {
-          return `\`${label}\``;
-        }
-        return `*${label}* (\`${shortPath}\`)`;
-      }
-      return `<${url}|${label}>`;
-    });
-
-    // 7. 水平線 (---, ***, ___) -> Slack 区切り線
+    // 8. 区切り線 (---, ***, ___) -> Slack 区切り実線
     converted = converted.replace(/^(\s*[-*_]\s*){3,}$/gm, "────────────────────────────────────");
 
-    // 8. 箇条書きリスト (- item, + item, * item) -> • item
+    // 9. 箇条書きリスト (- item, + item, * item) -> • item
     converted = converted.replace(/^(\s*)[-+*]\s+(.+)$/gm, "$1• $2");
 
-    // 9. インラインコードとコードブロックを復元
+    // 10. インラインコードとコードブロックを復元
     converted = converted.replace(/__INLINE_CODE_(\d+)__/g, (_match, idx) => {
       return inlineCodes[Number(idx)] || "";
     });
