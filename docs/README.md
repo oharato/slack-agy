@@ -4,6 +4,28 @@ Slack から Google Antigravity CLI (`agy`) を呼び出し、ローカルホス
 
 ---
 
+## 🚀 クイックスタート（全自動 1 ステップセットアップ）
+
+設定ファイル（`.env`）を用意してワンコマンドを実行するだけで、ホスト設定・権限・ビルド・systemd常駐化がすべて完了します：
+
+```bash
+# 1. 設定ファイルの準備
+cp .env.example .env
+# .env を編集して SLACK_BOT_TOKEN / SLACK_APP_TOKEN / SLACK_USER_OS_MAPPINGS を入力
+
+# 2. 全自動セットアップ & systemd 常駐起動
+pnpm run setup:all
+```
+
+> **💡 `pnpm run setup:all` が自動実行する内容**:
+> 1. `developers` グループおよび `slack-agy` サービスユーザーの作成
+> 2. 共有ディレクトリ `/var/workspace/shared`（repos/worktrees）の作成・ACL権限付与
+> 3. Sudoers 特権スイッチ設定（root昇格禁止ルール）の安全な配置
+> 4. TypeScript 本番ビルド & `/opt/slack-agy` への成果物配置
+> 5. systemd サービス（`slack-agy.service`）の自動登録・即時起動
+
+---
+
 ## 📚 ドキュメント構成
 
 | ドキュメント | 主な内容 |

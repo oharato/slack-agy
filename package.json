@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "setup:all": "./scripts/setup-all.sh",
     "setup:host": "./scripts/setup-host.sh",
     "deploy": "./scripts/deploy-systemd.sh",
     "test": "vitest run",
