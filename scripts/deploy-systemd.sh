@@ -70,11 +70,11 @@ Environment=PATH=${SYSTEM_PATH}
 WantedBy=multi-user.target
 EOF
 
-echo "=== [5/5] Reloading systemd and enabling service ==="
+echo "=== [5/5] Reloading systemd and restarting service ==="
 sudo systemctl daemon-reload
 sudo systemctl enable "${SERVICE_NAME}"
-echo "✓ Service '${SERVICE_NAME}' enabled."
+sudo systemctl restart "${SERVICE_NAME}"
+echo "✓ Service '${SERVICE_NAME}' updated and restarted."
 echo ""
-echo "🚀 To start the service, run:"
-echo "   sudo systemctl start ${SERVICE_NAME}"
-echo "   sudo systemctl status ${SERVICE_NAME}"
+echo "🚀 Service is running! Status:"
+sudo systemctl --no-pager status "${SERVICE_NAME}" || true

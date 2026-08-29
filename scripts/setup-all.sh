@@ -148,8 +148,9 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now "${SERVICE_NAME}"
-echo "✓ systemd service '${SERVICE_NAME}' enabled and started."
+sudo systemctl enable "${SERVICE_NAME}"
+sudo systemctl restart "${SERVICE_NAME}"
+echo "✓ systemd service '${SERVICE_NAME}' updated and restarted."
 
 echo ""
 echo "================================================================="
