@@ -135,6 +135,7 @@ describe("SlackFormatter", () => {
       "[local file](file:///var/workspace/shared/worktrees/docs-repo/README.md)",
       "> [!TIP] Helpful tip",
       "---",
+      "• Node.js LTS 準拠 / `pnpm` 利用（`https://npm.flatt.tech`・7日間クールダウン） / `preview-server.mjs` プレビュー",
     ].join("\n");
 
     const mrkdwn = SlackFormatter.markdownToMrkdwn(md);
@@ -145,6 +146,10 @@ describe("SlackFormatter", () => {
     expect(mrkdwn).toContain("• *CraftCommerce 総合技術比較* (`report.md`)");
     expect(mrkdwn).toContain("  • *内容*: *NuxtHub* と *Modern Rails* の比較");
     expect(mrkdwn).not.toContain("***");
+    expect(mrkdwn).not.toContain("INLINE_CODE");
+    expect(mrkdwn).toContain("`pnpm`");
+    expect(mrkdwn).toContain("`https://npm.flatt.tech`");
+    expect(mrkdwn).toContain("`preview-server.mjs`");
     expect(mrkdwn).toContain("<https://example.com|Docs>");
     expect(mrkdwn).toContain("README.md");
     expect(mrkdwn).toContain("💡 *[TIP]* Helpful tip");

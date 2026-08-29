@@ -97,18 +97,18 @@ export class SlackFormatter {
   public static markdownToMrkdwn(text: string): string {
     if (!text) return "";
 
-    // 1. コードブロック (```lang ... ```) をプレースホルダに退避
+    // 1. コードブロック (```lang ... ```) を安全なプレースホルダに退避
     const codeBlocks: string[] = [];
     let converted = text.replace(/```([\s\S]*?)```/g, (match) => {
       codeBlocks.push(match);
-      return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+      return `\u0001CODEBLOCK_${codeBlocks.length - 1}\u0002`;
     });
 
-    // 2. インラインコード (`...`) をプレースホルダに退避
+    // 2. インラインコード (`...`) を安全なプレースホルダに退避
     const inlineCodes: string[] = [];
     converted = converted.replace(/`([^`\n]+)`/g, (match) => {
       inlineCodes.push(match);
-      return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+      return `\u0001INLINECODE_${inlineCodes.length - 1}\u0002`;
     });
 
     // 3. 太字付きローカルファイルリンク **[Title](file:///...)** の先行変換
@@ -180,18 +180,18 @@ export class SlackFormatter {
       },
     );
 
-    // 11. 区切り線 (---, ***, ___) -> Slack 区切り実線
+    // 12. 区切り線 (---, ***, ___) -> Slack 区切り実線
     converted = converted.replace(/^(\s*[-*_]\s*){3,}$/gm, "────────────────────────────────────");
 
-    // 12. 箇条書きリスト (- item, + item, * item) -> • item
+    // 13. 箇条書きリスト (- item, + item, * item) -> • item
     converted = converted.replace(/^(\s*)[-+*]\s+(.+)$/gm, "$1• $2");
 
-    // 13. インラインコードとコードブロックを復元
-    converted = converted.replace(/__INLINE_CODE_(\d+)__/g, (_match, idx) => {
+    // 14. インラインコードとコードブロックを安全に復元
+    converted = converted.replace(/\u0001INLINECODE_(\d+)\u0002/g, (_match, idx) => {
       return inlineCodes[Number(idx)] || "";
     });
 
-    converted = converted.replace(/__CODE_BLOCK_(\d+)__/g, (_match, idx) => {
+    converted = converted.replace(/\u0001CODEBLOCK_(\d+)\u0002/g, (_match, idx) => {
       return codeBlocks[Number(idx)] || "";
     });
 
