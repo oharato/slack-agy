@@ -93,12 +93,15 @@ pnpm build
 sudo mkdir -p "${TARGET_DIR}/logs"
 sudo mkdir -p "${TARGET_DIR}/data"
 sudo cp -r dist package.json pnpm-lock.yaml "${TARGET_DIR}/"
+[ -f .npmrc ] && sudo cp .npmrc "${TARGET_DIR}/"
+[ -f pnpm-workspace.yaml ] && sudo cp pnpm-workspace.yaml "${TARGET_DIR}/"
 sudo cp .env "${TARGET_DIR}/.env"
 sudo chmod 600 "${TARGET_DIR}/.env"
 
-cd "${TARGET_DIR}"
-sudo -u slack-agy -H pnpm install --prod --registry=https://npm.flatt.tech >/dev/null 2>&1 || sudo -u slack-agy -H pnpm install --prod
 sudo chown -R slack-agy:developers "${TARGET_DIR}"
+sudo chmod 775 "${TARGET_DIR}"
+
+sudo -u slack-agy -H bash -c "cd '${TARGET_DIR}' && pnpm install --prod"
 echo "✓ Deployed production build to ${TARGET_DIR}"
 
 # 5. systemd サービス登録 & 起動

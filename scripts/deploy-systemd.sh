@@ -14,17 +14,20 @@ pnpm install
 pnpm build
 
 echo "=== [2/5] Deploying files to ${TARGET_DIR} ==="
-sudo mkdir -p "${TARGET_DIR}"
+sudo mkdir -p "${TARGET_DIR}/logs"
+sudo mkdir -p "${TARGET_DIR}/data"
 sudo cp -r dist package.json pnpm-lock.yaml "${TARGET_DIR}/"
+[ -f .npmrc ] && sudo cp .npmrc "${TARGET_DIR}/"
+[ -f pnpm-workspace.yaml ] && sudo cp pnpm-workspace.yaml "${TARGET_DIR}/"
 if [ -f .env ]; then
   sudo cp .env "${TARGET_DIR}/.env"
   sudo chmod 600 "${TARGET_DIR}/.env"
 fi
 sudo chown -R slack-agy:developers "${TARGET_DIR}"
+sudo chmod 775 "${TARGET_DIR}"
 
 echo "=== [3/5] Installing production dependencies in ${TARGET_DIR} ==="
-cd "${TARGET_DIR}"
-sudo -u slack-agy -H pnpm install --prod
+sudo -u slack-agy -H bash -c "cd '${TARGET_DIR}' && pnpm install --prod"
 
 echo "=== [4/5] Installing systemd service ==="
 NODE_PATH=$(which node)
