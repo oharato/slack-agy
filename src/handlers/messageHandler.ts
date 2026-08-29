@@ -32,6 +32,11 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
     const threadTs = rawEvent.thread_ts;
     const text = rawEvent.text;
 
+    // メンション付きメッセージは app_mention ハンドラ側で処理されるため、message イベントでは二重実行を防ぐためスキップ
+    if (text.includes("<@") || text.trim().startsWith("@agy")) {
+      return;
+    }
+
     // スレッド外の通常メッセージは app_mention で受け取るため、thread_ts がない場合はスキップ（DM以外）
     const isDirectMessage = rawEvent.channel_type === "im";
     if (!threadTs && !isDirectMessage) {

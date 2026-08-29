@@ -18,6 +18,8 @@ export interface MentionHandlerOptions {
   config: AppConfig;
 }
 
+const processedMentions = new Set<string>();
+
 export function registerMentionHandler(app: App, options: MentionHandlerOptions): void {
   const { userMapper, config } = options;
 
@@ -28,9 +30,16 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
     const threadTs = event.thread_ts || event.ts;
     const text = event.text;
 
-    if (!slackUserId) {
+    if (!slackUserId || !messageTs) {
       return;
     }
+
+    // 同一メッセージの重複処理防止
+    if (processedMentions.has(messageTs)) {
+      return;
+    }
+    processedMentions.add(messageTs);
+    setTimeout(() => processedMentions.delete(messageTs), 60000);
 
     logger.info("app_mention_received", {
       channelId,
