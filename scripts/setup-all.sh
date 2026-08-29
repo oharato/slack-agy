@@ -89,7 +89,8 @@ NODE_BIN=$(which node)
 NODE_DIR=$(dirname "${NODE_BIN}")
 PNPM_BIN=$(which pnpm)
 AGY_BIN_DIR=$(dirname "$(which agy 2>/dev/null || echo '/usr/local/bin/agy')")
-SYSTEM_PATH="${NODE_DIR}:${AGY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin"
+MISE_SHIMS="${HOME}/.local/share/mise/shims:${HOME}/.local/bin"
+SYSTEM_PATH="${NODE_DIR}:${MISE_SHIMS}:${AGY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin"
 
 # 4. ビルド & /opt/slack-agy へのデプロイ
 echo ""
@@ -100,6 +101,7 @@ sudo mkdir -p "${TARGET_DIR}/logs"
 sudo mkdir -p "${TARGET_DIR}/data"
 sudo cp -r dist package.json pnpm-lock.yaml "${TARGET_DIR}/"
 [ -f .npmrc ] && sudo cp .npmrc "${TARGET_DIR}/"
+[ -f .mise.toml ] && sudo cp .mise.toml "${TARGET_DIR}/"
 [ -f pnpm-workspace.yaml ] && sudo cp pnpm-workspace.yaml "${TARGET_DIR}/"
 sudo cp .env "${TARGET_DIR}/.env"
 sudo chmod 600 "${TARGET_DIR}/.env"

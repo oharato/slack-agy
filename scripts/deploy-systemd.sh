@@ -18,6 +18,7 @@ sudo mkdir -p "${TARGET_DIR}/logs"
 sudo mkdir -p "${TARGET_DIR}/data"
 sudo cp -r dist package.json pnpm-lock.yaml "${TARGET_DIR}/"
 [ -f .npmrc ] && sudo cp .npmrc "${TARGET_DIR}/"
+[ -f .mise.toml ] && sudo cp .mise.toml "${TARGET_DIR}/"
 [ -f pnpm-workspace.yaml ] && sudo cp pnpm-workspace.yaml "${TARGET_DIR}/"
 if [ -f .env ]; then
   sudo cp .env "${TARGET_DIR}/.env"
@@ -30,7 +31,8 @@ NODE_BIN=$(which node)
 NODE_DIR=$(dirname "${NODE_BIN}")
 PNPM_BIN=$(which pnpm)
 AGY_BIN_DIR=$(dirname "$(which agy 2>/dev/null || echo '/usr/local/bin/agy')")
-SYSTEM_PATH="${NODE_DIR}:${AGY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin"
+MISE_SHIMS="${HOME}/.local/share/mise/shims:${HOME}/.local/bin"
+SYSTEM_PATH="${NODE_DIR}:${MISE_SHIMS}:${AGY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin"
 
 echo "=== [3/5] Installing production dependencies in ${TARGET_DIR} ==="
 sudo -u slack-agy -H env "PATH=${SYSTEM_PATH}" bash -c "cd '${TARGET_DIR}' && '${PNPM_BIN}' install --prod"
