@@ -40,7 +40,7 @@ export class PrivilegeRunner {
     const args: string[] = [];
 
     if (conversationId) {
-      args.push("--resume", conversationId);
+      args.push("--conversation", conversationId);
     }
     args.push("-p", prompt, "--output-format", "stream-json", "--dangerously-skip-permissions");
 
