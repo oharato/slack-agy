@@ -75,6 +75,7 @@ export class PrivilegeRunner {
 
     return new Promise<RunAgyResult>((resolve) => {
       let finalResponse = "";
+      let accumulatedText = "";
       let capturedConvId = conversationId;
       let finalStatus: "SUCCESS" | "ERROR" | "CANCELLED" | "TIMEOUT" = "SUCCESS";
       let errorMessage: string | undefined;
@@ -194,12 +195,13 @@ export class PrivilegeRunner {
           (typeof event.content === "string" ? event.content : undefined) ||
           (typeof event.response === "string" ? event.response : undefined);
         if (textChunk) {
+          accumulatedText += textChunk;
           if (onProgress) onProgress(textChunk);
         }
 
         // Result event
         if (event.event === "result" || event.result) {
-          const resp = event.result?.response || event.response;
+          const resp = event.result?.response || event.response || accumulatedText;
           if (resp) {
             finalResponse = resp;
           }
