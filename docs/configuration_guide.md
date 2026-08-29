@@ -109,6 +109,14 @@ sudo setfacl -R -d -m g:developers:rwx /var/workspace/shared
 sudo setfacl -R -m g:developers:rwx /var/workspace/shared
 ```
 
+> [!TIP]
+> **ローカル開発環境 (`pnpm dev`) やパーミッションエラー (`EACCES`) 発生時の簡易設定**:
+> `developers` グループの追加直後はログアウト/再ログインするまでグループが有効にならない場合があります。
+> ローカルで即座に動作確認したい場合やテスト環境では、以下のコマンドで共有ディレクトリに全書き込み権限を付与できます：
+> ```bash
+> sudo chmod -R 777 /var/workspace/shared
+> ```
+
 ---
 
 ### 3.2 Sudoers 設定 (特権スイッチの許可 & root 昇格防止)
