@@ -6,8 +6,8 @@ export interface SessionInfo {
   threadTs: string;
   slackUserId: string;
   osUser: string;
-  repoName: string;
-  branchName: string;
+  repoName?: string;
+  branchName?: string;
   worktreePath: string;
   conversationId?: string;
   status: SessionStatus;
@@ -22,8 +22,8 @@ export interface CreateSessionParams {
   threadTs: string;
   slackUserId: string;
   osUser: string;
-  repoName: string;
-  branchName: string;
+  repoName?: string;
+  branchName?: string;
   worktreePath: string;
   conversationId?: string;
 }

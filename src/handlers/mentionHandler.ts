@@ -79,63 +79,71 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
     let session = sessionStore.getSessionByThread(channelId, threadTs);
     const repoTarget = specifiedRepo || session?.repoName || config.DEFAULT_REPO;
 
-    if (!repoTarget) {
-      await client.chat.postMessage({
-        channel: channelId,
-        thread_ts: threadTs,
-        text: [
-          `⚠️ *【リポジトリ未指定】*`,
-          `作業対象のリポジトリが設定されていません。`,
-          `以下のいずれかの方法でリポジトリを指定してください：`,
-          `  • \`!repo <リポジトリURL または 名前>\` を実行`,
-          `  • \`@agy <GitHubのURL> <指示内容>\` で指示`,
-          `  • \`@agy repo:<リポジトリ名> <指示内容>\` で指示`,
-        ].join("\n"),
-      });
-      return;
-    }
-
     try {
       if (!session || (specifiedRepo && session.repoName !== specifiedRepo)) {
-        const { repoName } = await worktreeManager.ensureRepo(repoTarget, osUser, config.DEFAULT_BASE_BRANCH);
-        const safeKey = threadTs.replace(/[^a-zA-Z0-9_-]/g, "_");
-        const branchName = `feat/${osUser}-thread-${safeKey}`;
-        const threadKey = `${channelId}:${threadTs}`;
+        if (repoTarget) {
+          // リポジトリ指定あり: Git Worktree を作成
+          const { repoName } = await worktreeManager.ensureRepo(repoTarget, osUser, config.DEFAULT_BASE_BRANCH);
+          const safeKey = threadTs.replace(/[^a-zA-Z0-9_-]/g, "_");
+          const branchName = `feat/${osUser}-thread-${safeKey}`;
+          const threadKey = `${channelId}:${threadTs}`;
 
-        const { worktreePath } = await worktreeManager.getOrCreateWorktree(
-          repoName,
-          threadKey,
-          branchName,
-          osUser,
-        );
+          const { worktreePath } = await worktreeManager.getOrCreateWorktree(
+            repoName,
+            threadKey,
+            branchName,
+            osUser,
+          );
 
-        session = sessionStore.createSession({
-          channelId,
-          threadTs,
-          slackUserId,
-          osUser,
-          repoName,
-          branchName,
-          worktreePath,
-        });
+          session = sessionStore.createSession({
+            channelId,
+            threadTs,
+            slackUserId,
+            osUser,
+            repoName,
+            branchName,
+            worktreePath,
+          });
 
-        // 初回作成時の案内メッセージ
-        await client.chat.postMessage({
-          channel: channelId,
-          thread_ts: threadTs,
-          text: [
-            `👤 *実行ユーザー*: <@${slackUserId}> (\`${osUser}\`)`,
-            `📂 *作業ワークツリー*: \`${worktreePath}\``,
-            `🌿 *ブランチ*: \`${branchName}\``,
-          ].join("\n"),
-        });
+          // 初回作成時の案内メッセージ
+          await client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text: [
+              `👤 *実行ユーザー*: <@${slackUserId}> (\`${osUser}\`)`,
+              `📂 *作業ワークツリー*: \`${worktreePath}\``,
+              `🌿 *ブランチ*: \`${branchName}\``,
+            ].join("\n"),
+          });
+        } else {
+          // リポジトリ指定なし: 自由相談・一般調査モード (ユーザーのホームディレクトリ等で実行)
+          const homeDir = `/home/${osUser}`;
+          session = sessionStore.createSession({
+            channelId,
+            threadTs,
+            slackUserId,
+            osUser,
+            worktreePath: homeDir,
+          });
+
+          // 初回作成時の案内メッセージ
+          await client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text: [
+              `👤 *実行ユーザー*: <@${slackUserId}> (\`${osUser}\`)`,
+              `💬 *モード*: 自由相談・一般調査 (リポジトリ未指定)`,
+              `💡 \`repo:<リポジトリ名>\` または \`!repo <リポジトリ名>\` で特定リポジトリでの作業にいつでも切り替えられます。`,
+            ].join("\n"),
+          });
+        }
       }
     } catch (err) {
       logger.error("failed_to_prepare_worktree", err, { repoTarget, osUser });
       await client.chat.postMessage({
         channel: channelId,
         thread_ts: threadTs,
-        text: SlackFormatter.formatError("作業ワークツリーの準備に失敗しました", String(err)),
+        text: SlackFormatter.formatError("作業ワークスペースの準備に失敗しました", String(err)),
       });
       return;
     }
@@ -244,11 +252,14 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
           durationMs: agyResult.durationMs,
           branchName: currentSession.branchName,
           conversationId: agyResult.conversationId,
+          showPrHint: Boolean(currentSession.repoName),
         });
 
         const chunked = MessageChunker.processMessage(formattedBlocks.text, {
           defaultFilename: "agy_result.txt",
-          title: `AGY 実行結果 (${currentSession.branchName})`,
+          title: currentSession.branchName
+            ? `AGY 実行結果 (${currentSession.branchName})`
+            : "AGY 実行結果",
         });
 
         if (chunked.type === "file") {

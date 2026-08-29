@@ -1,7 +1,7 @@
 export interface ProgressCardParams {
   osUser: string;
-  repoName: string;
-  branchName: string;
+  repoName?: string;
+  branchName?: string;
   worktreePath: string;
   startedAt: number;
   reasoningSnippet?: string;
@@ -22,10 +22,14 @@ export class ProgressCard {
       border,
       `⚙️ *AGY 実行中...* (OS User: \`${params.osUser}\` | 経過時間: ${elapsedSeconds}秒)`,
       border,
-      `🌿 *Branch*: \`${params.branchName}\``,
-      `📂 *CWD*: \`${params.worktreePath}\``,
-      "",
     ];
+
+    if (params.branchName) {
+      lines.push(`🌿 *Branch*: \`${params.branchName}\``);
+    } else {
+      lines.push(`💬 *Mode*: \`自由相談・一般調査\``);
+    }
+    lines.push(`📂 *CWD*: \`${params.worktreePath}\``, "");
 
     if (params.reasoningSnippet) {
       const truncatedReasoning =

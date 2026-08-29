@@ -171,11 +171,14 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
           durationMs: agyResult.durationMs,
           branchName: session.branchName,
           conversationId: agyResult.conversationId,
+          showPrHint: Boolean(session.repoName),
         });
 
         const chunked = MessageChunker.processMessage(formattedBlocks.text, {
           defaultFilename: "agy_result.txt",
-          title: `AGY 実行結果 (${session.branchName})`,
+          title: session.branchName
+            ? `AGY 実行結果 (${session.branchName})`
+            : "AGY 実行結果",
         });
 
         if (chunked.type === "file") {

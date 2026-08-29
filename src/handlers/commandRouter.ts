@@ -121,6 +121,15 @@ export class CommandRouter {
           return true;
         }
 
+        if (!session.repoName || !session.branchName) {
+          await client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text: "⚠️ 現在はリポジトリ未指定の自由相談セッションのため、Pull Request を作成できません。`!repo <リポジトリ名>` でリポジトリを指定してから実行してください。",
+          });
+          return true;
+        }
+
         try {
           const prTitle = args || `Update from Slack task (${session.branchName})`;
 
@@ -172,7 +181,7 @@ export class CommandRouter {
       case "info": {
         const session = sessionStore.getSessionByThread(channelId, threadTs);
         let diffStat = "";
-        if (session) {
+        if (session && session.repoName) {
           try {
             diffStat = await GitUtils.getStatusShort(session.worktreePath, { osUser });
           } catch {
@@ -200,13 +209,17 @@ export class CommandRouter {
         }
 
         try {
-          await worktreeManager.removeWorktree(session.worktreePath, session.repoName, osUser);
+          if (session.repoName) {
+            await worktreeManager.removeWorktree(session.worktreePath, session.repoName, osUser);
+          }
           sessionStore.deleteSession(session.threadKey);
 
           await client.chat.postMessage({
             channel: channelId,
             thread_ts: threadTs,
-            text: `🧹 *【Worktree クリーンアップ完了】*\n作業ディレクトリ \`${session.worktreePath}\` を削除し、セッションを終了しました。`,
+            text: session.repoName
+              ? `🧹 *【Worktree クリーンアップ完了】*\n作業ディレクトリ \`${session.worktreePath}\` を削除し、セッションを終了しました。`
+              : `🧹 *【セッション終了】*\n自由相談セッションを終了しました。`,
           });
         } catch (err) {
           await client.chat.postMessage({
