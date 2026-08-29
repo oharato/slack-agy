@@ -26,13 +26,83 @@ export class SlackFormatter {
     }
 
     const divider = "────────────────────────────────────";
-    const lines = [params.response.trim(), "", divider, metaParts.join(" | ")];
+    const formattedBody = this.markdownToMrkdwn(params.response.trim());
+    const lines = [formattedBody, "", divider, metaParts.join(" | ")];
 
     if (params.showPrHint !== false) {
       lines.push("💡 `!pr [タイトル]` で GitHub に Pull Request を作成できます。");
     }
 
     return lines.join("\n");
+  }
+
+  /**
+   * 標準 Markdown (CommonMark/GFM) を Slack 特有の mrkdwn 構文に変換
+   */
+  public static markdownToMrkdwn(text: string): string {
+    if (!text) return "";
+
+    // 1. コードブロック (```lang ... ```) をプレースホルダに退避
+    const codeBlocks: string[] = [];
+    let converted = text.replace(/```([\s\S]*?)```/g, (match) => {
+      codeBlocks.push(match);
+      return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+
+    // 2. インラインコード (`...`) をプレースホルダに退避
+    const inlineCodes: string[] = [];
+    converted = converted.replace(/`([^`\n]+)`/g, (match) => {
+      inlineCodes.push(match);
+      return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+    });
+
+    // 3. 見出し (# Header, ## Header, ### Header) -> *Header*
+    converted = converted.replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
+
+    // 4. 太字 (**bold** または __bold__) -> *bold*
+    converted = converted.replace(/\*\*([^*]+)\*\*/g, "*$1*");
+    converted = converted.replace(/__([^_]+)__/g, "*$1*");
+
+    // 5. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
+    converted = converted.replace(
+      /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gim,
+      (_m, type, rest) => {
+        const icon = type.toUpperCase() === "WARNING" || type.toUpperCase() === "CAUTION" ? "⚠️" : "💡";
+        return `> ${icon} *[${type.toUpperCase()}]* ${rest}`;
+      },
+    );
+
+    // 6. Markdown リンク [title](url) -> <url|title>
+    // file:/// スキームの場合はローカルパス表示に変換
+    converted = converted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
+      if (url.startsWith("file:///")) {
+        // file:///var/workspace/shared/worktrees/... などの長いパスを相対パス風に短縮
+        const cleanPath = url.replace(/^file:\/\/\/?/, "");
+        const shortPath = cleanPath.split("/worktrees/")[1] || cleanPath.split("/workspace/")[1] || cleanPath;
+        if (label === shortPath || label.includes(shortPath)) {
+          return `\`${label}\``;
+        }
+        return `*${label}* (\`${shortPath}\`)`;
+      }
+      return `<${url}|${label}>`;
+    });
+
+    // 7. 水平線 (---, ***, ___) -> Slack 区切り線
+    converted = converted.replace(/^(\s*[-*_]\s*){3,}$/gm, "────────────────────────────────────");
+
+    // 8. 箇条書きリスト (- item, + item, * item) -> • item
+    converted = converted.replace(/^(\s*)[-+*]\s+(.+)$/gm, "$1• $2");
+
+    // 9. インラインコードとコードブロックを復元
+    converted = converted.replace(/__INLINE_CODE_(\d+)__/g, (_match, idx) => {
+      return inlineCodes[Number(idx)] || "";
+    });
+
+    converted = converted.replace(/__CODE_BLOCK_(\d+)__/g, (_match, idx) => {
+      return codeBlocks[Number(idx)] || "";
+    });
+
+    return converted;
   }
 
   /**

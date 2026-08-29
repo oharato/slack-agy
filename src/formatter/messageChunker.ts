@@ -1,8 +1,9 @@
-export const SLACK_MAX_TEXT_LENGTH = 3800; // Slackの最大長4,000文字に対する安全マージン
+export const SLACK_MAX_TEXT_LENGTH = 2800; // Slack API の安全上限 (ブロックサイズ・メタデータ含む)
 
 export interface ChunkedMessage {
   type: "text" | "file";
   content: string;
+  previewText?: string;
   filename?: string;
   filetype?: string;
   title?: string;
@@ -10,7 +11,7 @@ export interface ChunkedMessage {
 
 export class MessageChunker {
   /**
-   * メッセージの長さを判定し、4,000文字以下ならテキスト、超える場合はファイルアップロード用データに変換
+   * メッセージの長さを判定し、2,800文字以下ならテキスト、超える場合はファイルアップロード用データに変換
    */
   public static processMessage(
     content: string,
@@ -27,9 +28,14 @@ export class MessageChunker {
       };
     }
 
+    // 長文の場合は先頭 1,200 文字をプレビューとして抜粋
+    const previewExcerpt = content.slice(0, 1200).trim();
+    const previewText = `${previewExcerpt}\n\n...（省略: 全文は下記の添付スニペットファイルを参照してください）`;
+
     return {
       type: "file",
       content,
+      previewText,
       filename: options.defaultFilename ?? "output.txt",
       filetype: options.filetype ?? "text",
       title: options.title ?? "AGY 実行結果 / 差分詳細",

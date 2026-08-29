@@ -183,7 +183,7 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
             await client.chat.update({
               channel: channelId,
               ts: progressMsgTs,
-              text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n文字数制限超過のため結果をファイル添付しました。`,
+              text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n\n${chunked.previewText || "文字数制限超過のため結果をファイル添付しました。"}`,
             });
           } catch {
             // ignore
