@@ -11,7 +11,55 @@ export interface FormatResultParams {
 
 export class SlackFormatter {
   /**
-   * AGY 実行結果メッセージを Slack 用にフォーマット
+   * AGY 実行結果メッセージを Slack Block Kit (ネイティブ markdown ブロック) 形式でフォーマット
+   */
+  public static formatResultBlocks(params: FormatResultParams): {
+    text: string;
+    blocks: Array<Record<string, unknown>>;
+  } {
+    const durationSec = (params.durationMs / 1000).toFixed(1);
+    const metaParts: string[] = [`👤 実行者: \`${params.osUser}\``, `⏱️ ${durationSec}s`];
+
+    if (params.branchName) {
+      metaParts.push(`🌿 \`${params.branchName}\``);
+    }
+
+    if (params.conversationId) {
+      metaParts.push(`🆔 \`${params.conversationId.slice(0, 8)}...\``);
+    }
+
+    const metaLine = metaParts.join(" | ");
+    const prHint =
+      params.showPrHint !== false
+        ? "\n💡 `!pr [タイトル]` で GitHub に Pull Request を作成できます。"
+        : "";
+
+    const rawMarkdown = params.response.trim();
+
+    const blocks: Array<Record<string, unknown>> = [
+      {
+        type: "markdown",
+        text: rawMarkdown,
+      },
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `${metaLine}${prHint}`,
+          },
+        ],
+      },
+    ];
+
+    return {
+      text: `${rawMarkdown}\n\n${metaLine}${prHint}`,
+      blocks,
+    };
+  }
+
+  /**
+   * AGY 実行結果メッセージをプレーンテキスト/フォールバック用にフォーマット
    */
   public static formatResult(params: FormatResultParams): string {
     const durationSec = (params.durationMs / 1000).toFixed(1);
@@ -26,8 +74,7 @@ export class SlackFormatter {
     }
 
     const divider = "────────────────────────────────────";
-    const formattedBody = this.markdownToMrkdwn(params.response.trim());
-    const lines = [formattedBody, "", divider, metaParts.join(" | ")];
+    const lines = [params.response.trim(), "", divider, metaParts.join(" | ")];
 
     if (params.showPrHint !== false) {
       lines.push("💡 `!pr [タイトル]` で GitHub に Pull Request を作成できます。");

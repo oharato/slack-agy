@@ -165,7 +165,7 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
           conversationId: agyResult.conversationId || session.conversationId,
         });
 
-        const formattedResult = SlackFormatter.formatResult({
+        const formattedBlocks = SlackFormatter.formatResultBlocks({
           response: agyResult.response || "実行が完了しました。",
           osUser: session.osUser,
           durationMs: agyResult.durationMs,
@@ -173,7 +173,7 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
           conversationId: agyResult.conversationId,
         });
 
-        const chunked = MessageChunker.processMessage(formattedResult, {
+        const chunked = MessageChunker.processMessage(formattedBlocks.text, {
           defaultFilename: "agy_result.txt",
           title: `AGY 実行結果 (${session.branchName})`,
         });
@@ -201,14 +201,16 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
             await client.chat.update({
               channel: channelId,
               ts: progressMsgTs,
-              text: formattedResult,
+              text: formattedBlocks.text,
+              blocks: formattedBlocks.blocks as any,
             });
           } catch (updateErr) {
             logger.warn("failed_to_update_progress_msg_posting_new", { error: String(updateErr) });
             await client.chat.postMessage({
               channel: channelId,
               thread_ts: effectiveThreadTs,
-              text: formattedResult,
+              text: formattedBlocks.text,
+              blocks: formattedBlocks.blocks as any,
             });
           }
         }
