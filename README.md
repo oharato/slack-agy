@@ -1,6 +1,6 @@
-# Slack-AGY Bridge 設計仕様書
+# Slack-AGY Bridge
 
-Slack から Google Antigravity CLI (`agy`) を呼び出し、ローカルホスト上で自律的な調査・開発タスクを実行するためのマルチユーザー対応ブリッジシステムの統合設計仕様書です。
+Slack から Google Antigravity CLI (`agy`) を呼び出し、Linux ホスト上で自律的な調査・開発タスクを実行するためのマルチユーザー対応ブリッジシステムです。
 
 ---
 
@@ -30,11 +30,11 @@ pnpm run setup:all
 
 | ドキュメント | 主な内容 |
 | :--- | :--- |
-| **[1. システム全体構成 (system_architecture.md)](./system_architecture.md)** | 全体アーキテクチャ図、コンポーネント構成、OSユーザーマッピング、Git Worktree 統合、共有ワークスペース、シーケンス図 |
-| **[2. 機能要件・Slack仕様 (functional_specification.md)](./functional_specification.md)** | メンション/DMトリガー、コマンド体系（`!help`, `!repo`, `!pr`, `!status`, `!clean`）、スタンプ承認（✅/❌, 1️⃣/2️⃣）、4,000文字対策、セキュリティガードレール |
-| **[3. 技術設計・実装詳細 (technical_design.md)](./technical_design.md)** | Node 24 LTS & TS 7、特権スイッチ（sudo）、BaseRepo Mutex、Worktree GC、Rate Limit 対策（800ms デバウンス）、JSONL 構造化ログ |
-| **[4. 設定・セキュリティ・環境構築 (configuration_guide.md)](./configuration_guide.md)** | 環境変数一覧、専用サービスユーザー (`slack-agy`)、厳格な sudoers 設定（root 昇格防止）、Worktree シークレット保護、systemd 自動起動 |
-| **[5. Slack App 設定ガイド (slack_app_setup.md)](./slack_app_setup.md)** | Slack App Manifest (YAML/JSON)、Socket Mode、OAuth Scopes (`files:write`, `reactions:write` 等)、Event Subscriptions |
+| **[1. システム全体構成](./docs/system_architecture.md)** | 全体アーキテクチャ図、コンポーネント構成、OSユーザーマッピング、Git Worktree 統合、共有ワークスペース、シーケンス図 |
+| **[2. 機能要件・Slack仕様](./docs/functional_specification.md)** | メンション/DMトリガー、コマンド体系（`!help`, `!repo`, `!pr`, `!status`, `!clean`）、スタンプ承認（✅/❌, 1️⃣/2️⃣）、4,000文字対策、セキュリティガードレール |
+| **[3. 技術設計・実装詳細](./docs/technical_design.md)** | Node 24 LTS & TS 7、特権スイッチ（sudo）、BaseRepo Mutex、Worktree GC、Rate Limit 対策（800ms デバウンス）、JSONL 構造化ログ |
+| **[4. 設定・セキュリティ・環境構築](./docs/configuration_guide.md)** | 環境変数一覧、専用サービスユーザー (`slack-agy`)、厳格な sudoers 設定（root 昇格防止）、Worktree シークレット保護、systemd 自動起動 |
+| **[5. Slack App 設定ガイド](./docs/slack_app_setup.md)** | Slack App Manifest (YAML/JSON)、Socket Mode、OAuth Scopes (`files:write`, `reactions:write` 等)、Event Subscriptions |
 
 ---
 
@@ -60,4 +60,4 @@ pnpm run setup:all
 7. **ポート開放不要の Socket Mode & systemd 常駐**:
    - ファイアウォール内やローカルマシンでも安全に常駐稼働。OS 起動時の自動起動とクラッシュ時自動復旧に対応。
 8. **高速・最新の開発ツールチェーン**:
-   - **Node.js 24 LTS**, **TypeScript 7.x**, **Vitest 4.x**, **Oxlint 1.x**, **Oxfmt 0.x**（7日間のサプライチェーンクールダウンを遵守）。
+   - **Node.js 24 LTS**, **pnpm 11**, **TypeScript 7.x**, **Vitest 4.x**, **Oxlint 1.x**, **Oxfmt 0.x**（7日間のサプライチェーンクールダウンを遵守）。
