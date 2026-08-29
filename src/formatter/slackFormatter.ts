@@ -148,15 +148,30 @@ export class SlackFormatter {
     // 7. 見出し (# Header, ## Header, ### Header) -> *Header*
     converted = converted.replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
 
-    // 8. 太字 (**bold** または __bold__) -> *bold*
-    converted = converted.replace(/\*\*([^*\n]+)\*\*/g, "*$1*");
-    converted = converted.replace(/__([^_\n]+)__/g, "*$1*");
+    // 8. 太字 (**bold** または __bold__) -> *bold* (日本語・全角記号との境界に安全なスペースを確保)
+    converted = converted.replace(/\*\*([^*\n]+?)\*\*/g, (_match, inner) => {
+      return ` *${inner.trim()}* `;
+    });
+    converted = converted.replace(/__([^_\n]+?)__/g, (_match, inner) => {
+      return ` *${inner.trim()}* `;
+    });
 
     // 9. アスタリスク重複のクリーンアップ (*** -> *, ** -> *)
     converted = converted.replace(/\*{3,}/g, "*");
     converted = converted.replace(/\*{2}/g, "*");
 
-    // 10. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
+    // 10. コロン直前の余分なスペースや重複スペースを行頭インデントを保持して整頓
+    converted = converted
+      .split("\n")
+      .map((line) => {
+        const indentMatch = line.match(/^(\s*)/);
+        const indent = indentMatch ? indentMatch[1] : "";
+        const rest = line.slice(indent.length);
+        return indent + rest.replace(/ {2,}/g, " ").replace(/\* : /g, "*: ").replace(/\* :(\s)/g, "*:$1").trimEnd();
+      })
+      .join("\n");
+
+    // 11. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
     converted = converted.replace(
       /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gim,
       (_m, type, rest) => {
