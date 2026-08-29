@@ -47,9 +47,24 @@ export class PrivilegeRunner {
     let cmd = this.agyPath;
     let spawnArgs = args;
 
+    const userHome = osUser ? `/home/${osUser}` : (process.env.HOME || "/root");
+    const userPath = `${userHome}/.local/bin:${userHome}/.local/share/mise/shims:${userHome}/.cargo/bin:/usr/local/bin:/usr/bin:/bin`;
+
     if (useSudo && osUser) {
       cmd = "sudo";
-      spawnArgs = ["-u", osUser, "-H", "--", this.agyPath, ...args];
+      spawnArgs = [
+        "-u",
+        osUser,
+        "-H",
+        "env",
+        `PATH=${userPath}`,
+        `HOME=${userHome}`,
+        `USER=${osUser}`,
+        `LOGNAME=${osUser}`,
+        `XDG_CONFIG_HOME=${userHome}/.config`,
+        this.agyPath,
+        ...args,
+      ];
     }
 
     logger.info("spawning_agy_process", {
@@ -220,12 +235,15 @@ export class PrivilegeRunner {
         }
       });
 
+      let stderrBuffer = "";
+
       proc.stdout?.on("data", (chunk) => {
         parser.push(chunk);
       });
 
       proc.stderr?.on("data", (chunk) => {
         const text = chunk.toString();
+        stderrBuffer += text;
         logger.debug("agy_process_stderr", { threadKey, text: text.trim() });
       });
 
@@ -245,7 +263,8 @@ export class PrivilegeRunner {
             errorMessage,
           );
         } else {
-          finish("ERROR", finalResponse.trim(), errorMessage || `Process exited with code ${code}`);
+          const detail = errorMessage || stderrBuffer.trim() || `Process exited with code ${code}`;
+          finish("ERROR", finalResponse.trim() || `エラーが発生しました: ${detail}`, detail);
         }
       });
     });

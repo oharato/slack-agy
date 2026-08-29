@@ -35,8 +35,22 @@ export async function execCommandAsUser(
   let cmdArgs = args;
 
   if (useSudo && osUser) {
+    const userHome = `/home/${osUser}`;
+    const userPath = `${userHome}/.local/bin:${userHome}/.local/share/mise/shims:${userHome}/.cargo/bin:/usr/local/bin:/usr/bin:/bin`;
     cmd = "sudo";
-    cmdArgs = ["-u", osUser, "-H", "--", command, ...args];
+    cmdArgs = [
+      "-u",
+      osUser,
+      "-H",
+      "env",
+      `PATH=${userPath}`,
+      `HOME=${userHome}`,
+      `USER=${osUser}`,
+      `LOGNAME=${osUser}`,
+      `XDG_CONFIG_HOME=${userHome}/.config`,
+      command,
+      ...args,
+    ];
   }
 
   try {
