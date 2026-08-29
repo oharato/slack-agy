@@ -111,28 +111,52 @@ export class SlackFormatter {
       return `__INLINE_CODE_${inlineCodes.length - 1}__`;
     });
 
-    // 3. ローカルファイルリンク [Title](file:///path/to/file.ext) の変換
-    converted = converted.replace(/\[([^\]]+)\]\(file:\/\/\/([^)]+)\)/g, (_match, label, filePath) => {
-      // ファイル名のみまたは末尾のパスを抽出
-      const parts = filePath.split("/");
-      const fileName = parts[parts.length - 1] || filePath;
-      if (label === fileName || label.includes(fileName)) {
-        return `\`${label}\``;
-      }
-      return `*${label}* (\`${fileName}\`)`;
-    });
+    // 3. 太字付きローカルファイルリンク **[Title](file:///...)** の先行変換
+    converted = converted.replace(
+      /\*\*\[([^\]]+)\]\(file:\/\/\/([^)]+)\)\*\*/g,
+      (_match, label, filePath) => {
+        const parts = filePath.split("/");
+        const fileName = parts[parts.length - 1] || filePath;
+        return `*${label}* (\`${fileName}\`)`;
+      },
+    );
 
-    // 4. Web リンク [Title](https://...) の変換 -> <https://...|Title>
+    // 4. 太字付きWebリンク **[Title](https://...)** の先行変換
+    converted = converted.replace(
+      /\*\*\[([^\]]+)\]\((https?:\/\/[^)]+)\)\*\*/g,
+      (_match, label, url) => {
+        return `*<${url}|${label}>*`;
+      },
+    );
+
+    // 5. 通常のローカルファイルリンク [Title](file:///path/to/file.ext) の変換
+    converted = converted.replace(
+      /\[([^\]]+)\]\(file:\/\/\/([^)]+)\)/g,
+      (_match, label, filePath) => {
+        const parts = filePath.split("/");
+        const fileName = parts[parts.length - 1] || filePath;
+        if (label === fileName || label.includes(fileName)) {
+          return `\`${label}\``;
+        }
+        return `*${label}* (\`${fileName}\`)`;
+      },
+    );
+
+    // 6. 通常のWebリンク [Title](https://...) の変換 -> <https://...|Title>
     converted = converted.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "<$2|$1>");
 
-    // 5. 見出し (# Header, ## Header, ### Header) -> *Header*
+    // 7. 見出し (# Header, ## Header, ### Header) -> *Header*
     converted = converted.replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
 
-    // 6. 太字 (**bold** または __bold__) -> *bold*
+    // 8. 太字 (**bold** または __bold__) -> *bold*
     converted = converted.replace(/\*\*([^*\n]+)\*\*/g, "*$1*");
     converted = converted.replace(/__([^_\n]+)__/g, "*$1*");
 
-    // 7. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
+    // 9. アスタリスク重複のクリーンアップ (*** -> *, ** -> *)
+    converted = converted.replace(/\*{3,}/g, "*");
+    converted = converted.replace(/\*{2}/g, "*");
+
+    // 10. GitHub Style Alert (> [!TIP], > [!NOTE], etc.)
     converted = converted.replace(
       /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gim,
       (_m, type, rest) => {
@@ -141,13 +165,13 @@ export class SlackFormatter {
       },
     );
 
-    // 8. 区切り線 (---, ***, ___) -> Slack 区切り実線
+    // 11. 区切り線 (---, ***, ___) -> Slack 区切り実線
     converted = converted.replace(/^(\s*[-*_]\s*){3,}$/gm, "────────────────────────────────────");
 
-    // 9. 箇条書きリスト (- item, + item, * item) -> • item
+    // 12. 箇条書きリスト (- item, + item, * item) -> • item
     converted = converted.replace(/^(\s*)[-+*]\s+(.+)$/gm, "$1• $2");
 
-    // 10. インラインコードとコードブロックを復元
+    // 13. インラインコードとコードブロックを復元
     converted = converted.replace(/__INLINE_CODE_(\d+)__/g, (_match, idx) => {
       return inlineCodes[Number(idx)] || "";
     });

@@ -129,6 +129,8 @@ describe("SlackFormatter", () => {
       "**bold text** and __also bold__",
       "- item 1",
       "- item 2",
+      "* **[CraftCommerce 総合技術比較](file:///var/workspace/docs/report.md)**",
+      "  * **内容**: **NuxtHub** と **Modern Rails** の比較",
       "[Docs](https://example.com)",
       "[local file](file:///var/workspace/shared/worktrees/docs-repo/README.md)",
       "> [!TIP] Helpful tip",
@@ -140,6 +142,9 @@ describe("SlackFormatter", () => {
     expect(mrkdwn).toContain("*Header 2*");
     expect(mrkdwn).toContain("*bold text*");
     expect(mrkdwn).toContain("• item 1");
+    expect(mrkdwn).toContain("• *CraftCommerce 総合技術比較* (`report.md`)");
+    expect(mrkdwn).toContain("  • *内容*: *NuxtHub* と *Modern Rails* の比較");
+    expect(mrkdwn).not.toContain("***");
     expect(mrkdwn).toContain("<https://example.com|Docs>");
     expect(mrkdwn).toContain("README.md");
     expect(mrkdwn).toContain("💡 *[TIP]* Helpful tip");
