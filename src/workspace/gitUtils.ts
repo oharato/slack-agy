@@ -27,7 +27,7 @@ export async function execCommandAsUser(
   const {
     cwd,
     osUser,
-    useSudo = Boolean(osUser && process.env.NODE_ENV !== "test" && process.getuid?.() === 0),
+    useSudo = Boolean(osUser && process.env.NODE_ENV !== "test" && osUser !== process.env.USER),
     timeoutMs = 60000,
   } = options;
 

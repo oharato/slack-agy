@@ -16,7 +16,7 @@ export class PrivilegeRunner {
 
   constructor(options: PrivilegeRunnerOptions = {}) {
     this.agyPath = options.agyPath ?? "agy";
-    this.useSudo = options.useSudo ?? (process.env.NODE_ENV !== "test" && process.getuid?.() === 0);
+    this.useSudo = options.useSudo ?? (process.env.NODE_ENV !== "test");
   }
 
   /**
@@ -29,7 +29,7 @@ export class PrivilegeRunner {
       osUser,
       conversationId,
       timeoutMs = 600000, // 10 minutes
-      useSudo = this.useSudo,
+      useSudo = (this.useSudo && Boolean(osUser && osUser !== process.env.USER)),
       onEvent,
       onProgress,
       onReasoning,
