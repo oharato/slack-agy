@@ -20,12 +20,16 @@ sudo cp -r dist package.json pnpm-lock.yaml "${TARGET_DIR}/"
 [ -f .npmrc ] && sudo cp .npmrc "${TARGET_DIR}/"
 [ -f .mise.toml ] && sudo cp .mise.toml "${TARGET_DIR}/"
 [ -f pnpm-workspace.yaml ] && sudo cp pnpm-workspace.yaml "${TARGET_DIR}/"
+[ -d node_modules ] && sudo cp -r node_modules "${TARGET_DIR}/"
 if [ -f .env ]; then
   sudo cp .env "${TARGET_DIR}/.env"
   sudo chmod 600 "${TARGET_DIR}/.env"
 fi
 sudo chown -R slack-agy:developers "${TARGET_DIR}"
-sudo chmod 775 "${TARGET_DIR}"
+sudo chmod -R 775 "${TARGET_DIR}"
+
+# サービスユーザーが node/pnpm を実行できるよう、ホームディレクトリの探索権限(x)を付与
+sudo setfacl -m u:slack-agy:rx "${HOME}" 2>/dev/null || sudo chmod a+x "${HOME}" 2>/dev/null || true
 
 NODE_BIN=$(which node)
 NODE_DIR=$(dirname "${NODE_BIN}")
@@ -34,8 +38,7 @@ AGY_BIN_DIR=$(dirname "$(which agy 2>/dev/null || echo '/usr/local/bin/agy')")
 MISE_SHIMS="${HOME}/.local/share/mise/shims:${HOME}/.local/bin"
 SYSTEM_PATH="${NODE_DIR}:${MISE_SHIMS}:${AGY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin"
 
-echo "=== [3/5] Installing production dependencies in ${TARGET_DIR} ==="
-sudo -u slack-agy -H env "PATH=${SYSTEM_PATH}" bash -c "cd '${TARGET_DIR}' && '${PNPM_BIN}' install --prod"
+echo "=== [3/5] Installed production dependencies in ${TARGET_DIR} ==="
 
 echo "=== [4/5] Installing systemd service ==="
 cat << EOF | sudo tee "${SERVICE_FILE}" > /dev/null
