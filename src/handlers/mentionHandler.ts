@@ -4,8 +4,8 @@ import { AppConfig } from "../config/schema.js";
 import { commandRouter } from "./commandRouter.js";
 import { sessionStore } from "../session/sessionStore.js";
 import { worktreeManager } from "../workspace/worktreeManager.js";
-import { extractRepoFromPrompt } from "../workspace/repoUtils.js";
-import { privilegeRunner } from "../runner/privilegeRunner.js";
+import { extractPromptOptions } from "../workspace/repoUtils.js";
+import { agentRegistry } from "../agent/agentRegistry.js";
 import { taskQueue } from "../queue/taskQueue.js";
 import { ProgressThrottler } from "../formatter/progressThrottler.js";
 import { ProgressCard } from "../formatter/progressCard.js";
@@ -67,7 +67,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
       return;
     }
 
-    // 3. コマンド処理の試行 (!help, !repo, !pr, !status, !clean, !reset, !cancel)
+    // 3. コマンド処理の試行 (!help, !agent, !repo, !pr, !status, !clean, !reset, !cancel)
     const isHandled = await commandRouter.handleIfCommand({
       client,
       channelId,
@@ -80,13 +80,40 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
       return;
     }
 
-    // 4. 自然言語プロンプトおよびリポジトリ指定の抽出
+    // 4. 自然言語プロンプト、エージェント指定、リポジトリ指定の抽出
     const rawPrompt = text.replace(/<@[A-Z0-9]+>/g, "").trim();
-    const { repoNameOrUrl: specifiedRepo, cleanedPrompt: prompt } =
-      extractRepoFromPrompt(rawPrompt);
+    const {
+      agentId: promptAgentId,
+      repoNameOrUrl: specifiedRepo,
+      cleanedPrompt: prompt,
+    } = extractPromptOptions(rawPrompt);
+
+    // エージェントの有効性検証
+    if (promptAgentId && !agentRegistry.has(promptAgentId)) {
+      await client.chat.postMessage({
+        channel: channelId,
+        thread_ts: threadTs,
+        text: SlackFormatter.formatError(
+          `未対応のエージェントです: \`${promptAgentId}\``,
+          `利用可能なエージェント: ${agentRegistry.list().join(", ")}`,
+        ),
+      });
+      return;
+    }
 
     // 5. セッション & Worktree の確認と準備
     let session = sessionStore.getSessionByThread(channelId, threadTs);
+    const effectiveAgent = promptAgentId || session?.agentId || config.DEFAULT_AGENT;
+
+    // 既存セッションで異なるエージェントがプロンプト指定された場合、対話履歴をリセットして切り替え
+    if (session && promptAgentId && session.agentId !== promptAgentId) {
+      sessionStore.updateSession(session.threadKey, {
+        agentId: promptAgentId as any,
+        conversationId: undefined,
+      });
+      session = sessionStore.getSessionByThread(channelId, threadTs);
+    }
+
     const repoTarget = specifiedRepo || session?.repoName || config.DEFAULT_REPO;
 
     try {
@@ -114,6 +141,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
             threadTs,
             slackUserId,
             osUser,
+            agentId: effectiveAgent as any,
             repoName,
             branchName,
             worktreePath,
@@ -125,6 +153,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
             thread_ts: threadTs,
             text: [
               `👤 *実行ユーザー*: <@${slackUserId}> (\`${osUser}\`)`,
+              `🤖 *エージェント*: \`${effectiveAgent}\``,
               `📂 *作業ワークツリー*: \`${worktreePath}\``,
               `🌿 *ブランチ*: \`${branchName}\``,
             ].join("\n"),
@@ -137,6 +166,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
             threadTs,
             slackUserId,
             osUser,
+            agentId: effectiveAgent as any,
             worktreePath: homeDir,
           });
 
@@ -146,6 +176,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
             thread_ts: threadTs,
             text: [
               `👤 *実行ユーザー*: <@${slackUserId}> (\`${osUser}\`)`,
+              `🤖 *エージェント*: \`${effectiveAgent}\``,
               `💬 *モード*: 自由相談・一般調査 (リポジトリ未指定)`,
               `💡 \`repo:<リポジトリ名>\` または \`!repo <リポジトリ名>\` で特定リポジトリでの作業にいつでも切り替えられます。`,
             ].join("\n"),
@@ -162,14 +193,15 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
       return;
     }
 
-    const currentSession = session;
+    const currentSession = session!;
     const threadKey = currentSession.threadKey;
+    const runningAgentId = currentSession.agentId || effectiveAgent;
 
     // 6. 受付メッセージの投稿
     const initialMsg = await client.chat.postMessage({
       channel: channelId,
       thread_ts: threadTs,
-      text: `⏳ *AGY タスクを受け付けました...* (準備中)`,
+      text: `⏳ *${runningAgentId.toUpperCase()} タスクを受け付けました...* (準備中)`,
     });
 
     const progressMsgTs = initialMsg.ts;
@@ -178,7 +210,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
       return;
     }
 
-    // 7. TaskQueue 経由で AGY プロセスを実行
+    // 7. TaskQueue 経由でエージェントプロセスを実行
     await taskQueue.enqueue(threadKey, async () => {
       sessionStore.updateSession(threadKey, { status: "running" });
 
@@ -194,35 +226,26 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
       let reasoningSnippet: string | undefined;
 
       try {
-        const agyResult = await privilegeRunner.runAgy(threadKey, {
+        const agent = agentRegistry.get(runningAgentId);
+        const agentResult = await agent.run({
+          taskId: threadKey,
           prompt,
           cwd: currentSession.worktreePath,
           osUser: currentSession.osUser,
-          conversationId: currentSession.conversationId,
+          sessionId: currentSession.conversationId,
           timeoutMs: config.TASK_TIMEOUT_MS,
-          onReasoning: (text) => {
-            reasoningSnippet = text;
-            throttler.update(
-              ProgressCard.render({
-                osUser: currentSession.osUser,
-                repoName: currentSession.repoName,
-                branchName: currentSession.branchName,
-                worktreePath: currentSession.worktreePath,
-                startedAt,
-                reasoningSnippet,
-                activeTool,
-                recentTools,
-              }),
-            );
-          },
-          onToolCall: (toolName) => {
-            activeTool = toolName;
-            if (!recentTools.includes(toolName)) {
-              recentTools.push(toolName);
+          onEvent: (event) => {
+            if (event.type === "tool_call") {
+              activeTool = event.name;
+              if (!recentTools.includes(event.name)) recentTools.push(event.name);
+            } else if (event.type === "progress") {
+              activeTool = undefined;
+              reasoningSnippet = event.text;
             }
             throttler.update(
               ProgressCard.render({
                 osUser: currentSession.osUser,
+                agentId: runningAgentId,
                 repoName: currentSession.repoName,
                 branchName: currentSession.branchName,
                 worktreePath: currentSession.worktreePath,
@@ -230,22 +253,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
                 reasoningSnippet,
                 activeTool,
                 recentTools,
-              }),
-            );
-          },
-          onProgress: (snippet) => {
-            activeTool = undefined;
-            throttler.update(
-              ProgressCard.render({
-                osUser: currentSession.osUser,
-                repoName: currentSession.repoName,
-                branchName: currentSession.branchName,
-                worktreePath: currentSession.worktreePath,
-                startedAt,
-                reasoningSnippet,
-                activeTool,
-                recentTools,
-                lastUpdateSnippet: snippet.slice(0, 150),
+                lastUpdateSnippet: event.type === "progress" ? event.text.slice(0, 150) : undefined,
               }),
             );
           },
@@ -257,23 +265,24 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
         // セッションの conversationId を保存
         sessionStore.updateSession(threadKey, {
           status: "idle",
-          conversationId: agyResult.conversationId || currentSession.conversationId,
+          conversationId: agentResult.sessionId || currentSession.conversationId,
         });
 
         const formattedBlocks = SlackFormatter.formatResultBlocks({
-          response: agyResult.response || "実行が完了しました。",
+          response: agentResult.response || "実行が完了しました。",
           osUser: currentSession.osUser,
-          durationMs: agyResult.durationMs,
+          agentId: runningAgentId,
+          durationMs: agentResult.durationMs,
           branchName: currentSession.branchName,
-          conversationId: agyResult.conversationId,
+          conversationId: agentResult.sessionId,
           showPrHint: Boolean(currentSession.repoName),
         });
 
         const chunked = MessageChunker.processMessage(formattedBlocks.text, {
-          defaultFilename: "agy_result.txt",
+          defaultFilename: `${runningAgentId}_result.txt`,
           title: currentSession.branchName
-            ? `AGY 実行結果 (${currentSession.branchName})`
-            : "AGY 実行結果",
+            ? `${runningAgentId.toUpperCase()} 実行結果 (${currentSession.branchName})`
+            : `${runningAgentId.toUpperCase()} 実行結果`,
         });
 
         if (chunked.type === "file") {
@@ -281,7 +290,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
             await client.chat.update({
               channel: channelId,
               ts: progressMsgTs,
-              text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n\n${chunked.previewText || "文字数制限超過のため結果をファイル添付しました。"}`,
+              text: `✅ *${runningAgentId.toUpperCase()} 実行完了* (${(agentResult.durationMs / 1000).toFixed(1)}s)\n\n${chunked.previewText || "文字数制限超過のため結果をファイル添付しました。"}`,
             });
           } catch {
             // ignore
@@ -317,11 +326,14 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
         throttler.cancel();
         sessionStore.updateSession(threadKey, { status: "idle" });
 
-        logger.error("error_during_agy_execution", err, { threadKey });
+        logger.error("error_during_agent_execution", err, { threadKey, agentId: runningAgentId });
         await client.chat.update({
           channel: channelId,
           ts: progressMsgTs,
-          text: SlackFormatter.formatError("AGY の実行中にエラーが発生しました", String(err)),
+          text: SlackFormatter.formatError(
+            `${runningAgentId.toUpperCase()} の実行中にエラーが発生しました`,
+            String(err),
+          ),
         });
       }
     });

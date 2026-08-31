@@ -12,6 +12,39 @@ export interface ExtractedRepoInfo {
   cleanedPrompt: string;
 }
 
+export interface ExtractedPromptOptions {
+  agentId?: string;
+  repoNameOrUrl?: string;
+  cleanedPrompt: string;
+}
+
+/**
+ * プロンプトテキストからエージェント指定（agent:xxx）を抽出
+ */
+export function extractAgentFromPrompt(text: string): { agentId?: string; cleanedPrompt: string } {
+  let prompt = text;
+  const match = prompt.match(/\bagent:([a-zA-Z0-9_-]+)/i);
+  if (match) {
+    const agentId = match[1].toLowerCase();
+    prompt = prompt.replace(match[0], "").trim();
+    return { agentId, cleanedPrompt: prompt };
+  }
+  return { agentId: undefined, cleanedPrompt: prompt };
+}
+
+/**
+ * プロンプトテキストからエージェント指定およびリポジトリ指定を抽出
+ */
+export function extractPromptOptions(text: string): ExtractedPromptOptions {
+  const agentRes = extractAgentFromPrompt(text);
+  const repoRes = extractRepoFromPrompt(agentRes.cleanedPrompt);
+  return {
+    agentId: agentRes.agentId,
+    repoNameOrUrl: repoRes.repoNameOrUrl,
+    cleanedPrompt: repoRes.cleanedPrompt,
+  };
+}
+
 /**
  * プロンプトテキストからリポジトリ指定（repo:xxx, GitHub URL, Slack リンク等）を抽出
  */
