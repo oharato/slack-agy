@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CodexStreamParser } from "./codexStreamParser.js";
+import { CodexStreamParser } from "../../../src/agent/codex/codexStreamParser.js";
 
 describe("CodexStreamParser", () => {
   it("emits complete JSONL events across chunk boundaries and preserves raw output", () => {

@@ -5,7 +5,8 @@ import {
   extractRepoFromPrompt,
   parseRepoTarget,
   sanitizeSlackLink,
-} from "./repoUtils.js";
+} from "../../src/workspace/repoUtils.js";
+
 
 describe("repoUtils", () => {
   it("should sanitize slack link markup", () => {

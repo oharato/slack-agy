@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { TaskQueue } from "./taskQueue.js";
+import { TaskQueue } from "../../src/queue/taskQueue.js";
+
 
 describe("TaskQueue", () => {
   it("should limit maximum concurrent tasks to maxConcurrent", async () => {

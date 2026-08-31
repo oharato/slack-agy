@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { AgentExecutor } from "./agentExecutor.js";
-import { agentRegistry } from "../agent/agentRegistry.js";
-import { sessionStore } from "../session/sessionStore.js";
-import type { SlackClient } from "../interaction/interactionManager.js";
-import type { AppConfig } from "../config/schema.js";
+import { AgentExecutor } from "../../src/handlers/agentExecutor.js";
+import { agentRegistry } from "../../src/agent/agentRegistry.js";
+import { sessionStore } from "../../src/session/sessionStore.js";
+import type { SlackClient } from "../../src/interaction/interactionManager.js";
+import type { AppConfig } from "../../src/config/schema.js";
+
 
 describe("AgentExecutor", () => {
   const mockConfig: AppConfig = {

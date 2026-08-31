@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { StreamParser } from "./streamParser.js";
-import { PrivilegeRunner } from "./privilegeRunner.js";
-import { AgyEvent } from "./types.js";
+import { StreamParser } from "../../src/runner/streamParser.js";
+import { PrivilegeRunner } from "../../src/runner/privilegeRunner.js";
+import { AgyEvent } from "../../src/runner/types.js";
+
 
 describe("StreamParser", () => {
   it("should parse multiple NDJSON lines correctly", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { agentRegistry } from "./agentRegistry.js";
+import { agentRegistry } from "../../src/agent/agentRegistry.js";
 
 describe("AgentRegistry", () => {
   it("should have agy and codex adapters registered", () => {

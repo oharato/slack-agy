@@ -2,8 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DurableJobQueue } from "./durableJobQueue.js";
-import { SqliteStore } from "../storage/sqliteStore.js";
+import { DurableJobQueue } from "../../src/queue/durableJobQueue.js";
+import { SqliteStore } from "../../src/storage/sqliteStore.js";
+
 
 describe("DurableJobQueue", () => {
   let tmpDir: string;

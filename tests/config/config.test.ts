@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { configSchema } from "./schema.js";
-import { UserMapper } from "./userMap.js";
+import { configSchema } from "../../src/config/schema.js";
+import { UserMapper } from "../../src/config/userMap.js";
+
 
 describe("Config Schema Validation", () => {
   it("should validate valid configuration and parse json mapping", () => {

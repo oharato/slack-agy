@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { InteractionManager } from "./interactionManager.js";
-import type { SlackClient } from "./interactionManager.js";
+import { InteractionManager } from "../../src/interaction/interactionManager.js";
+import type { SlackClient } from "../../src/interaction/interactionManager.js";
+
 
 describe("InteractionManager", () => {
   function createMockSlackClient() {

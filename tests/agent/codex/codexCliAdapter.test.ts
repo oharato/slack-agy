@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EventEmitter } from "node:events";
-import { CodexCliAdapter, normalizeCodexEvent } from "./codexCliAdapter.js";
+import { CodexCliAdapter, normalizeCodexEvent } from "../../../src/agent/codex/codexCliAdapter.js";
+
 
 // Mock child_process spawn
 vi.mock("node:child_process", () => ({

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { CommandRouter } from "./commandRouter.js";
-import { sessionStore } from "../session/sessionStore.js";
-import type { SlackClient } from "../interaction/interactionManager.js";
+import { CommandRouter } from "../../src/handlers/commandRouter.js";
+import { sessionStore } from "../../src/session/sessionStore.js";
+import type { SlackClient } from "../../src/interaction/interactionManager.js";
+
 
 describe("CommandRouter", () => {
   let router: CommandRouter;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { OptionDetector } from "./optionDetector.js";
+import { OptionDetector } from "../../src/interaction/optionDetector.js";
+
 
 describe("OptionDetector", () => {
   it("detects numbered options correctly (1. 2. 3.)", () => {
