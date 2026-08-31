@@ -201,7 +201,6 @@ describe("SlackFormatter", () => {
     expect(unauth).toContain("SLACK_USER_OS_MAPPINGS");
   });
 
-
   it("should optimize local file links in prepareMarkdownForSlack while keeping markdown structure", () => {
     const md = [
       "# Header 1",

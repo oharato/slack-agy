@@ -206,7 +206,10 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
         throttler.cancel();
         sessionStore.updateSession(threadKey, { status: "idle" });
 
-        logger.error("error_during_thread_message_agent_execution", err, { threadKey, agentId: runningAgentId });
+        logger.error("error_during_thread_message_agent_execution", err, {
+          threadKey,
+          agentId: runningAgentId,
+        });
         await client.chat.update({
           channel: channelId,
           ts: progressMsgTs,
@@ -219,4 +222,3 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
     });
   });
 }
-

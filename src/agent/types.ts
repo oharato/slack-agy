@@ -37,4 +37,3 @@ export interface AgentAdapter {
   cancel(taskId: string): boolean;
   isRunning(taskId: string): boolean;
 }
-

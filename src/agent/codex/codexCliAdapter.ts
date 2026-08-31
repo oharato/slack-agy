@@ -1,5 +1,11 @@
 import { ChildProcess, spawn } from "node:child_process";
-import type { AgentAdapter, AgentCapabilities, AgentEvent, AgentRunOptions, AgentRunResult } from "../types.js";
+import type {
+  AgentAdapter,
+  AgentCapabilities,
+  AgentEvent,
+  AgentRunOptions,
+  AgentRunResult,
+} from "../types.js";
 import { CodexStreamParser } from "./codexStreamParser.js";
 import { logger } from "../../logger/index.js";
 import { auditLogger } from "../../logger/auditLogger.js";
@@ -54,7 +60,7 @@ export class CodexCliAdapter implements AgentAdapter {
 
     const runWithSudo =
       this.useSudo && Boolean(options.osUser && options.osUser !== process.env.USER);
-    const userHome = options.osUser ? `/home/${options.osUser}` : (process.env.HOME || "/root");
+    const userHome = options.osUser ? `/home/${options.osUser}` : process.env.HOME || "/root";
     const userPath = `${userHome}/.local/bin:${userHome}/.local/share/mise/shims:${userHome}/.cargo/bin:/usr/local/bin:/usr/bin:/bin`;
     const cmd = runWithSudo ? "sudo" : this.command;
     const args = runWithSudo
@@ -195,11 +201,7 @@ export class CodexCliAdapter implements AgentAdapter {
           finish("SUCCESS");
         } else {
           const detail = stderr.trim() || `Process exited with code ${code}`;
-          finish(
-            "ERROR",
-            response.trim() || `エラーが発生しました: ${detail}`,
-            detail,
-          );
+          finish("ERROR", response.trim() || `エラーが発生しました: ${detail}`, detail);
         }
       });
     });
@@ -243,7 +245,6 @@ export function normalizeCodexEvent(
     (objectValue(event.thread) ? stringValue(objectValue(event.thread)?.id) : undefined);
   const sessionId = explicitSessionId ?? currentSessionId;
 
-
   const type = stringValue(event.type);
   const item = objectValue(event.item);
   const text =
@@ -254,7 +255,6 @@ export function normalizeCodexEvent(
     stringValue(item?.text) ??
     stringValue(item?.content) ??
     stringValue(item?.response);
-
 
   if (!type) {
     return { sessionId, events: text ? [{ type: "progress", text }] : [] };
@@ -330,4 +330,3 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
     ? (value as Record<string, unknown>)
     : undefined;
 }
-

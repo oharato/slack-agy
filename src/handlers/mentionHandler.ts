@@ -103,8 +103,7 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
 
     // 5. セッション & Worktree の確認と準備
     let session = sessionStore.getSessionByThread(channelId, threadTs);
-    const effectiveAgent =
-      promptAgentId || session?.agentId || config.DEFAULT_AGENT;
+    const effectiveAgent = promptAgentId || session?.agentId || config.DEFAULT_AGENT;
 
     // 既存セッションで異なるエージェントがプロンプト指定された場合、対話履歴をリセットして切り替え
     if (session && promptAgentId && session.agentId !== promptAgentId) {
@@ -340,4 +339,3 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
     });
   });
 }
-

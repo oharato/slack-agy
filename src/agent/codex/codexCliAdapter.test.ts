@@ -47,7 +47,15 @@ describe("CodexCliAdapter", () => {
 
     expect(spawn).toHaveBeenCalledWith(
       "codex",
-      ["exec", "--json", "--cd", "/tmp/workspace", "--skip-git-repo-check", "--approve-for-me", "Fix the bug"],
+      [
+        "exec",
+        "--json",
+        "--cd",
+        "/tmp/workspace",
+        "--skip-git-repo-check",
+        "--approve-for-me",
+        "Fix the bug",
+      ],
       expect.objectContaining({ cwd: "/tmp/workspace" }),
     );
 
@@ -62,7 +70,9 @@ describe("CodexCliAdapter", () => {
     );
     mockProc.stdout.emit(
       "data",
-      Buffer.from('{"type":"item.started","item":{"type":"command_execution","command":"pnpm test"}}\n'),
+      Buffer.from(
+        '{"type":"item.started","item":{"type":"command_execution","command":"pnpm test"}}\n',
+      ),
     );
     mockProc.stdout.emit(
       "data",

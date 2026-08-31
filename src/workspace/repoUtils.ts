@@ -93,7 +93,6 @@ export function extractRepoFromPrompt(text: string): ExtractedRepoInfo {
   };
 }
 
-
 /**
  * リポジトリ URL や名前からリポジトリ名 (ディレクトリ名) と Clone 用ターゲットを導出
  */

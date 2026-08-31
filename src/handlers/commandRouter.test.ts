@@ -146,4 +146,3 @@ describe("CommandRouter", () => {
     expect(mockPostMessage).not.toHaveBeenCalled();
   });
 });
-

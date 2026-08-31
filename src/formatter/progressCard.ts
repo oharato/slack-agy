@@ -60,4 +60,3 @@ export class ProgressCard {
     return lines.join("\n");
   }
 }
-

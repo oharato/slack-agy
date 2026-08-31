@@ -98,7 +98,6 @@ export class SlackFormatter {
     return lines.join("\n");
   }
 
-
   /**
    * Slack 公式 Markdown ブロック向けに Markdown を最適化
    * - テーブル (Table) や見出し、コードブロック、タスクリスト、太字などは標準 Markdown のまま保持
@@ -344,7 +343,6 @@ export class SlackFormatter {
 
     return lines.join("\n");
   }
-
 
   /**
    * 未登録ユーザー向けの権限エラーメッセージ
