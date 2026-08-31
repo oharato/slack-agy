@@ -126,4 +126,75 @@ describe("InteractionManager", () => {
     expect(result.timedOut).toBe(true);
     expect(result.selectedOption.value).toBe("deny");
   });
+
+  it("should handle registered message choices on reaction added", async () => {
+    const manager = new InteractionManager();
+    const { client, reactions } = createMockSlackClient();
+    const onSelect = vi.fn();
+
+    await manager.registerMessageChoices(client, {
+      channelId: "C_MAIN",
+      threadTs: "1700.123",
+      messageTs: "1700.456",
+      allowedSlackUserId: "U_ALICE",
+      osUser: "alice",
+      title: "デプロイ方法の選択",
+      options: [
+        { emoji: "one", displayEmoji: "1️⃣", label: "Docker Compose", value: "1. Docker Compose" },
+        { emoji: "two", displayEmoji: "2️⃣", label: "Kubernetes", value: "2. Kubernetes" },
+      ],
+      onSelect,
+    });
+
+    expect(reactions.get("1700.456")).toEqual(["one", "two"]);
+
+    // Alice selects option 2
+    const handled = await manager.handleReactionAdded(client, {
+      user: "U_ALICE",
+      reaction: "two",
+      item: { type: "message", channel: "C_MAIN", ts: "1700.456" },
+    });
+
+    expect(handled).toBe(true);
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ label: "Kubernetes", value: "2. Kubernetes" }),
+      "U_ALICE",
+    );
+  });
+
+  it("should handle block action button clicks", async () => {
+    const manager = new InteractionManager();
+    const { client } = createMockSlackClient();
+    const onSelect = vi.fn();
+
+    await manager.registerMessageChoices(client, {
+      channelId: "C_MAIN",
+      threadTs: "1700.123",
+      messageTs: "1700.789",
+      allowedSlackUserId: "U_ALICE",
+      osUser: "alice",
+      options: [
+        { emoji: "one", displayEmoji: "1️⃣", label: "Option A", value: "opt_a" },
+        { emoji: "two", displayEmoji: "2️⃣", label: "Option B", value: "opt_b" },
+      ],
+      onSelect,
+    });
+
+    const handled = await manager.handleBlockAction(
+      client,
+      {
+        user: { id: "U_ALICE" },
+        channel: { id: "C_MAIN" },
+        message: { ts: "1700.789" },
+      },
+      { action_id: "select_option_1", value: "opt_b" },
+    );
+
+    expect(handled).toBe(true);
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ label: "Option B", value: "opt_b" }),
+      "U_ALICE",
+    );
+  });
 });
+

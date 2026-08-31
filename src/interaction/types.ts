@@ -54,6 +54,31 @@ export interface RequestQuestionParams {
   timeoutMs?: number;
 }
 
+export interface RegisterMessageChoicesParams {
+  channelId: string;
+  threadTs: string;
+  messageTs: string;
+  allowedSlackUserId: string;
+  osUser: string;
+  agentId?: string;
+  title?: string;
+  options: InteractionOption[];
+  onSelect?: (selectedOption: InteractionOption, slackUserId: string) => Promise<void> | void;
+}
+
+export interface RegisteredMessageChoice {
+  channelId: string;
+  threadTs: string;
+  messageTs: string;
+  allowedSlackUserId: string;
+  osUser: string;
+  agentId?: string;
+  title?: string;
+  options: InteractionOption[];
+  createdAt: number;
+  onSelect?: (selectedOption: InteractionOption, slackUserId: string) => Promise<void> | void;
+}
+
 export const NUMBER_EMOJIS: Array<{ emoji: string; displayEmoji: string }> = [
   { emoji: "one", displayEmoji: "1️⃣" },
   { emoji: "two", displayEmoji: "2️⃣" },
@@ -66,3 +91,4 @@ export const NUMBER_EMOJIS: Array<{ emoji: string; displayEmoji: string }> = [
   { emoji: "nine", displayEmoji: "9️⃣" },
   { emoji: "keycap_ten", displayEmoji: "🔟" },
 ];
+

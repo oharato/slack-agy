@@ -405,10 +405,10 @@ GROUP BY osUser;
 
 ---
 
-## 7. インタラクティブ承認・スタンプ連携設計 (`InteractionManager`)
+## 7. インタラクティブ承認・スタンプ & ボタン連携設計 (`InteractionManager` & `OptionDetector`)
 
-### 7.1 リアクション駆動インターフェースの動作原理
-AGY のサブプロセスがユーザー確認や方針決定（`ask_question` や危険コマンド承認）を要求した際、プロセスの stdin や非同期 Promise を一時待機させ、Slack の絵文字リアクションによって再開させるメカニズムです。
+### 7.1 リアクション & ボタン駆動インターフェースの動作原理
+AI エージェントがユーザー確認や方針決定（`ask_question` ツール、危険コマンド承認、または出力テキスト内の選択肢）を提示した際、Slack の絵文字リアクションまたは Block Kit ボタンによって、ユーザーがテキストを入力することなくワンタップで回答・次のターンを実行させるメカニズムです。
 
 ```mermaid
 sequenceDiagram
@@ -417,43 +417,58 @@ sequenceDiagram
     participant Slack as Slack (Channel / Thread)
     participant Bolt as Bolt App (Socket Mode)
     participant IM as InteractionManager
+    participant OD as OptionDetector
+    participant Ex as AgentExecutor
     participant AGY as PrivilegeRunner (AGY CLI)
 
-    AGY->>IM: ユーザー承認要求 (title, allowedUser: 'U_ALICE')
-    IM->>Slack: chat.postMessage (⚠️ 確認・許可要求)
-    IM->>Slack: reactions.add (✅ :white_check_mark:)
-    IM->>Slack: reactions.add (❌ :x:)
-    IM-->>AGY: Promise 待機 (pendingInteractions に登録)
+    AGY-->>Ex: 実行結果 (1. Option A / 2. Option B)
+    Ex->>OD: OptionDetector.detect(response)
+    OD-->>Ex: 検出された選択肢 (1️⃣, 2️⃣)
+    Ex->>Slack: chat.update (結果 + Block Kit ボタン)
+    Ex->>IM: registerMessageChoices()
+    IM->>Slack: reactions.add (1️⃣, 2️⃣ 自動スタンプ)
 
-    Alice->>Slack: ✅ スタンプを押下
-    Slack->>Bolt: reaction_added イベント受信 (user: 'U_ALICE', reaction: 'white_check_mark')
-    Bolt->>IM: handleReactionAdded()
-    IM->>IM: 発信者検証 (U_ALICE == allowedUser) & Promise 解決
-    IM->>Slack: chat.update (✅ @Alice が実行を許可しました)
-    IM-->>AGY: 承認結果 (status: 'approve') 返却
-    AGY->>AGY: 処理を継続・実行
+    Alice->>Slack: 2️⃣ スタンプ (またはボタン) を押下
+    Slack->>Bolt: reaction_added / block_actions
+    Bolt->>IM: handleReactionAdded() / handleBlockAction()
+    IM->>Ex: onSelect(selectedOption, 'U_ALICE')
+    Ex->>Slack: 👉 @Alice が選択しました: 2️⃣ Option B
+    Ex->>AGY: agent.run(prompt: "2. Option B", sessionId: ...)
 ```
 
-### 7.2 `InteractionManager` のコア実装仕様
+### 7.2 `InteractionManager` & `OptionDetector` のコア実装仕様
 
 ```typescript
+export class OptionDetector {
+  // テキストから番号付きリスト (1. 2. 3...) / 絵文字 (1️⃣ 2️⃣...) / アルファベット / 承認 (✅ ❌) を自動抽出
+  public static detect(text: string): DetectedChoice | null;
+}
+
 export class InteractionManager {
   private pendingInteractions = new Map<string, PendingInteraction>();
+  private registeredChoices = new Map<string, RegisteredMessageChoice>();
 
-  // 許可要求 (Yes/No)
+  // 同期待機: 許可要求 (Yes/No)
   public async requestApproval(client: SlackClient, params: RequestApprovalParams): Promise<InteractionResult>;
 
-  // 複数選択質問 (1️⃣, 2️⃣, 3️⃣...)
+  // 同期待機: 複数選択質問 (1️⃣, 2️⃣, 3️⃣...)
   public async requestQuestion(client: SlackClient, params: RequestQuestionParams): Promise<InteractionResult>;
+
+  // 非同期ターン連携: 完了メッセージの選択肢登録 & スタンプ自動付与
+  public async registerMessageChoices(client: SlackClient, params: RegisterMessageChoicesParams): Promise<void>;
 
   // reaction_added イベントハンドラ
   public async handleReactionAdded(client: SlackClient, event: ReactionEvent): Promise<boolean>;
+
+  // Block Kit ボタン押下ハンドラ
+  public async handleBlockAction(client: SlackClient, body: BlockActionBody, action: BlockAction): Promise<boolean>;
 }
 ```
 
 - **待機キー**: `${channelId}:${messageTs}` で保留中のタスクを一意に識別。
 - **タイムアウト保護**: 5分間スタンプが押されない場合、タイマーにより安全側（拒否またはスキップ）で Promise を解決し、リソースリークを防止。
-- **監査ログ連携**: 誰がどのスタンプを押して承認・拒否したかを `audit.jsonl` に自動記録。
+- **監査ログ連携**: 誰がどのスタンプ・ボタンを押して承認・選択したかを `audit.jsonl` に自動記録。
+
 
 ---
 

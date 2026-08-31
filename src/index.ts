@@ -5,6 +5,7 @@ import { UserMapper } from "./config/userMap.js";
 import { registerMentionHandler } from "./handlers/mentionHandler.js";
 import { registerMessageHandler } from "./handlers/messageHandler.js";
 import { registerReactionHandler } from "./handlers/reactionHandler.js";
+import { registerActionHandler } from "./handlers/actionHandler.js";
 import { WorktreeCleaner } from "./workspace/worktreeCleaner.js";
 import { worktreeManager } from "./workspace/worktreeManager.js";
 import { logger } from "./logger/index.js";
@@ -33,6 +34,8 @@ async function main(): Promise<void> {
   registerMentionHandler(app, { userMapper, config });
   registerMessageHandler(app, { userMapper, config });
   registerReactionHandler(app);
+  registerActionHandler(app);
+
 
   // 定期的な放置 Worktree ガベージコレクション (24時間ごと)
   const gcIntervalMs = 24 * 60 * 60 * 1000;

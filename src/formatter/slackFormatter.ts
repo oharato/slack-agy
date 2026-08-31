@@ -1,5 +1,6 @@
 import { SessionInfo } from "../session/types.js";
 import { MessageChunker } from "./messageChunker.js";
+import { InteractionOption } from "../interaction/types.js";
 
 export interface FormatResultParams {
   response: string;
@@ -9,6 +10,7 @@ export interface FormatResultParams {
   branchName?: string;
   conversationId?: string;
   showPrHint?: boolean;
+  options?: InteractionOption[];
 }
 
 export class SlackFormatter {
@@ -51,6 +53,31 @@ export class SlackFormatter {
       text: chunk,
     }));
 
+    // 選択肢ボタンの追加 (最大10個まで対応、5個ごとに actions ブロック分割)
+    if (params.options && params.options.length > 0) {
+      const options = params.options.slice(0, 10);
+      for (let i = 0; i < options.length; i += 5) {
+        const chunk = options.slice(i, i + 5);
+        blocks.push({
+          type: "actions",
+          elements: chunk.map((opt, idx) => {
+            const rawLabel = `${opt.displayEmoji} ${opt.label}`;
+            const trimmedLabel = rawLabel.length > 70 ? `${rawLabel.slice(0, 67)}...` : rawLabel;
+            return {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: trimmedLabel,
+                emoji: true,
+              },
+              value: opt.value,
+              action_id: `interaction_opt_${i + idx}`,
+            };
+          }),
+        });
+      }
+    }
+
     // メタ情報コンテキストブロック
     blocks.push({
       type: "context",
@@ -67,6 +94,7 @@ export class SlackFormatter {
       blocks,
     };
   }
+
 
   /**
    * エージェント実行結果メッセージをプレーンテキスト用にフォーマット
