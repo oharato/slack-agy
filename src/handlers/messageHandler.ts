@@ -3,7 +3,7 @@ import { UserMapper } from "../config/userMap.js";
 import { AppConfig } from "../config/schema.js";
 import { commandRouter } from "./commandRouter.js";
 import { sessionStore } from "../session/sessionStore.js";
-import { privilegeRunner } from "../runner/privilegeRunner.js";
+import { agentRegistry } from "../agent/agentRegistry.js";
 import { taskQueue } from "../queue/taskQueue.js";
 import { ProgressThrottler } from "../formatter/progressThrottler.js";
 import { ProgressCard } from "../formatter/progressCard.js";
@@ -83,11 +83,12 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
     // 自然言語プロンプトの実行
     const prompt = text.replace(/<@[A-Z0-9]+>/g, "").trim();
     const threadKey = session.threadKey;
+    const runningAgentId = session.agentId || config.DEFAULT_AGENT;
 
     const initialMsg = await client.chat.postMessage({
       channel: channelId,
       thread_ts: effectiveThreadTs,
-      text: `⏳ *AGY 実行中...*`,
+      text: `⏳ *${runningAgentId.toUpperCase()} 実行中...*`,
     });
 
     const progressMsgTs = initialMsg.ts;
@@ -108,17 +109,26 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
       let reasoningSnippet: string | undefined;
 
       try {
-        const agyResult = await privilegeRunner.runAgy(threadKey, {
+        const agent = agentRegistry.get(runningAgentId);
+        const agentResult = await agent.run({
+          taskId: threadKey,
           prompt,
           cwd: session.worktreePath,
           osUser: session.osUser,
-          conversationId: session.conversationId,
+          sessionId: session.conversationId,
           timeoutMs: config.TASK_TIMEOUT_MS,
-          onReasoning: (t) => {
-            reasoningSnippet = t;
+          onEvent: (event) => {
+            if (event.type === "tool_call") {
+              activeTool = event.name;
+              if (!recentTools.includes(event.name)) recentTools.push(event.name);
+            } else if (event.type === "progress") {
+              activeTool = undefined;
+              reasoningSnippet = event.text;
+            }
             throttler.update(
               ProgressCard.render({
                 osUser: session.osUser,
+                agentId: runningAgentId,
                 repoName: session.repoName,
                 branchName: session.branchName,
                 worktreePath: session.worktreePath,
@@ -126,38 +136,7 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
                 reasoningSnippet,
                 activeTool,
                 recentTools,
-              }),
-            );
-          },
-          onToolCall: (name) => {
-            activeTool = name;
-            if (!recentTools.includes(name)) recentTools.push(name);
-            throttler.update(
-              ProgressCard.render({
-                osUser: session.osUser,
-                repoName: session.repoName,
-                branchName: session.branchName,
-                worktreePath: session.worktreePath,
-                startedAt,
-                reasoningSnippet,
-                activeTool,
-                recentTools,
-              }),
-            );
-          },
-          onProgress: (snippet) => {
-            activeTool = undefined;
-            throttler.update(
-              ProgressCard.render({
-                osUser: session.osUser,
-                repoName: session.repoName,
-                branchName: session.branchName,
-                worktreePath: session.worktreePath,
-                startedAt,
-                reasoningSnippet,
-                activeTool,
-                recentTools,
-                lastUpdateSnippet: snippet.slice(0, 150),
+                lastUpdateSnippet: event.type === "progress" ? event.text.slice(0, 150) : undefined,
               }),
             );
           },
@@ -167,21 +146,24 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
 
         sessionStore.updateSession(threadKey, {
           status: "idle",
-          conversationId: agyResult.conversationId || session.conversationId,
+          conversationId: agentResult.sessionId || session.conversationId,
         });
 
         const formattedBlocks = SlackFormatter.formatResultBlocks({
-          response: agyResult.response || "実行が完了しました。",
+          response: agentResult.response || "実行が完了しました。",
           osUser: session.osUser,
-          durationMs: agyResult.durationMs,
+          agentId: runningAgentId,
+          durationMs: agentResult.durationMs,
           branchName: session.branchName,
-          conversationId: agyResult.conversationId,
+          conversationId: agentResult.sessionId,
           showPrHint: Boolean(session.repoName),
         });
 
         const chunked = MessageChunker.processMessage(formattedBlocks.text, {
-          defaultFilename: "agy_result.txt",
-          title: session.branchName ? `AGY 実行結果 (${session.branchName})` : "AGY 実行結果",
+          defaultFilename: `${runningAgentId}_result.txt`,
+          title: session.branchName
+            ? `${runningAgentId.toUpperCase()} 実行結果 (${session.branchName})`
+            : `${runningAgentId.toUpperCase()} 実行結果`,
         });
 
         if (chunked.type === "file") {
@@ -189,7 +171,7 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
             await client.chat.update({
               channel: channelId,
               ts: progressMsgTs,
-              text: `✅ *AGY 実行完了* (${(agyResult.durationMs / 1000).toFixed(1)}s)\n\n${chunked.previewText || "文字数制限超過のため結果をファイル添付しました。"}`,
+              text: `✅ *${runningAgentId.toUpperCase()} 実行完了* (${(agentResult.durationMs / 1000).toFixed(1)}s)\n\n${chunked.previewText || "文字数制限超過のため結果をファイル添付しました。"}`,
             });
           } catch {
             // ignore
@@ -224,13 +206,17 @@ export function registerMessageHandler(app: App, options: MessageHandlerOptions)
         throttler.cancel();
         sessionStore.updateSession(threadKey, { status: "idle" });
 
-        logger.error("error_during_thread_message_agy_execution", err, { threadKey });
+        logger.error("error_during_thread_message_agent_execution", err, { threadKey, agentId: runningAgentId });
         await client.chat.update({
           channel: channelId,
           ts: progressMsgTs,
-          text: SlackFormatter.formatError("AGY の実行中にエラーが発生しました", String(err)),
+          text: SlackFormatter.formatError(
+            `${runningAgentId.toUpperCase()} の実行中にエラーが発生しました`,
+            String(err),
+          ),
         });
       }
     });
   });
 }
+

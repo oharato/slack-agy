@@ -6,6 +6,7 @@ export interface SessionInfo {
   threadTs: string;
   slackUserId: string;
   osUser: string;
+  agentId: "agy" | "codex";
   repoName?: string;
   branchName?: string;
   worktreePath: string;
@@ -22,6 +23,7 @@ export interface CreateSessionParams {
   threadTs: string;
   slackUserId: string;
   osUser: string;
+  agentId?: "agy" | "codex";
   repoName?: string;
   branchName?: string;
   worktreePath: string;

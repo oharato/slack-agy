@@ -5,6 +5,7 @@ export interface FormatResultParams {
   response: string;
   osUser: string;
   durationMs: number;
+  agentId?: string;
   branchName?: string;
   conversationId?: string;
   showPrHint?: boolean;
@@ -12,7 +13,7 @@ export interface FormatResultParams {
 
 export class SlackFormatter {
   /**
-   * AGY 実行結果メッセージを Slack Block Kit (Slack公式 markdown ブロック形式) でフォーマット
+   * エージェント実行結果メッセージを Slack Block Kit (Slack公式 markdown ブロック形式) でフォーマット
    * 表 (GFM Table)、コードハイライト、タスクリスト、見出しがネイティブ描画されます。
    */
   public static formatResultBlocks(params: FormatResultParams): {
@@ -21,6 +22,10 @@ export class SlackFormatter {
   } {
     const durationSec = (params.durationMs / 1000).toFixed(1);
     const metaParts: string[] = [`👤 実行者: \`${params.osUser}\``, `⏱️ ${durationSec}s`];
+
+    if (params.agentId) {
+      metaParts.push(`🤖 \`${params.agentId}\``);
+    }
 
     if (params.branchName) {
       metaParts.push(`🌿 \`${params.branchName}\``);
@@ -64,11 +69,15 @@ export class SlackFormatter {
   }
 
   /**
-   * AGY 実行結果メッセージをプレーンテキスト用にフォーマット
+   * エージェント実行結果メッセージをプレーンテキスト用にフォーマット
    */
   public static formatResult(params: FormatResultParams): string {
     const durationSec = (params.durationMs / 1000).toFixed(1);
     const metaParts: string[] = [`👤 実行者: \`${params.osUser}\``, `⏱️ ${durationSec}s`];
+
+    if (params.agentId) {
+      metaParts.push(`🤖 \`${params.agentId}\``);
+    }
 
     if (params.branchName) {
       metaParts.push(`🌿 \`${params.branchName}\``);
@@ -88,6 +97,7 @@ export class SlackFormatter {
 
     return lines.join("\n");
   }
+
 
   /**
    * Slack 公式 Markdown ブロック向けに Markdown を最適化
@@ -280,24 +290,29 @@ export class SlackFormatter {
    */
   public static formatHelp(): string {
     return [
-      "🤖 *Slack-AGY Bridge ヘルプ & コマンドガイド*",
+      "🤖 *Slack Agent Bridge ヘルプ & コマンドガイド*",
       "",
-      "Slack から Google Antigravity CLI (`agy`) を呼び出し、安全かつ自律的に開発タスクを実行します。",
+      "Slack からローカル AI エージェント（Antigravity `agy`, OpenAI Codex `codex`）を呼び出し、安全かつ自律的に開発タスクを実行します。",
       "",
       "*【利用可能なコマンド一覧】*",
       "• `!help` : このヘルプメッセージを表示します。",
+      "• `!agent <agy|codex>` : スレッドの実行エージェントを切り替えます（例: `!agent codex`）。",
       "• `!repo <repo_name | git_url>` : スレッドの作業対象リポジトリを指定します（初回は自動クローン & Worktree 作成）。",
       "• `!pr [title]` : 現在のブランチをプッシュし、GitHub に Pull Request を作成します。",
-      "• `!status` / `!info` : 現在のスレッドの作業状態（OS ユーザー、Worktree パス、ブランチ、差分概要等）を表示します。",
+      "• `!status` / `!info` : 現在のスレッドの作業状態（AI エージェント、OS ユーザー、Worktree パス、ブランチ、差分概要等）を表示します。",
       "• `!clean` / `!done` : 現在の Git Worktree を削除し、ディスク容量を解放します。",
-      "• `!reset` : 現在のスレッドの対話履歴（conversation_id）を破棄し、新規セッションを開始します。",
-      "• `!cancel` : 現在実行中の AGY タスクを緊急停止します。",
+      "• `!reset` : 現在のスレッドの対話履歴（セッションID）を破棄し、新規セッションを開始します。",
+      "• `!cancel` : 現在実行中のエージェントタスクを緊急停止します。",
+      "",
+      "*【インラインオプション】*",
+      "• `agent:<agy|codex>` : プロンプト内で直接エージェントを指定できます（例: `@bridge agent:codex repo:my-repo バグを修正して`）。",
+      "• `repo:<リポジトリ名>` : プロンプト内で作業リポジトリを指定できます。",
       "",
       "*【スタンプ（絵文字リアクション）連携】*",
       "• ⚠️ *確認・承認*: デプロイや危険操作の確認時、Bot が付与した ✅ / ❌ スタンプを押すことで実行を許可/中止できます。",
       "• ❓ *選択肢の回答*: 実装方針などの質問時、番号スタンプ（1️⃣, 2️⃣, 3️⃣）を押して回答を選択できます。",
       "",
-      "※ 指示を送信する際は、このスレッド内で直接メッセージを入力するか、Bot をメンション（`@agy <指示>`）してください。",
+      "※ 指示を送信する際は、このスレッド内で直接メッセージを入力するか、Bot をメンション（`@bridge <指示>`）してください。",
     ].join("\n");
   }
 
@@ -306,18 +321,19 @@ export class SlackFormatter {
    */
   public static formatStatus(session?: SessionInfo, diffStat?: string): string {
     if (!session) {
-      return "ℹ️ このスレッドには現在アクティブなセッションがありません。\n`@agy <リポジトリ名>` または `@agy !repo <リポジトリ名>` で作業を開始できます。";
+      return "ℹ️ このスレッドには現在アクティブなセッションがありません。\n`@bridge <リポジトリ名>` または `@bridge !repo <リポジトリ名>` で作業を開始できます。";
     }
 
     const lines: string[] = [
       "📋 *【スレッド作業状態】*",
+      `• *AI エージェント*: \`${session.agentId || "agy"}\``,
       `• *Slack ユーザー*: <@${session.slackUserId}>`,
       `• *OS ユーザー*: \`${session.osUser}\``,
-      `• *対象リポジトリ*: \`${session.repoName}\``,
-      `• *作業ブランチ*: \`${session.branchName}\``,
+      `• *対象リポジトリ*: \`${session.repoName || "未指定 (自由相談モード)"}\``,
+      `• *作業ブランチ*: \`${session.branchName || "(none)"}\``,
       `• *Worktree パス*: \`${session.worktreePath}\``,
       `• *ステータス*: \`${session.status}\``,
-      `• *Conversation ID*: \`${session.conversationId || "未設定 (初回実行待ち)"}\``,
+      `• *セッション ID*: \`${session.conversationId || "未設定 (初回実行待ち)"}\``,
     ];
 
     if (diffStat && diffStat.trim()) {
@@ -328,6 +344,7 @@ export class SlackFormatter {
 
     return lines.join("\n");
   }
+
 
   /**
    * 未登録ユーザー向けの権限エラーメッセージ

@@ -3,7 +3,7 @@ import { sessionStore } from "../session/sessionStore.js";
 import { worktreeManager } from "../workspace/worktreeManager.js";
 import { sanitizeSlackLink } from "../workspace/repoUtils.js";
 import { GitUtils } from "../workspace/gitUtils.js";
-import { privilegeRunner } from "../runner/privilegeRunner.js";
+import { agentRegistry } from "../agent/agentRegistry.js";
 import { SlackFormatter } from "../formatter/slackFormatter.js";
 import { logger } from "../logger/index.js";
 import { auditLogger } from "../logger/auditLogger.js";
@@ -28,7 +28,7 @@ export class CommandRouter {
     const { client, channelId, threadTs, slackUserId, osUser, text } = ctx;
     const trimmed = text.trim();
 
-    // コマンド判定: "!" または "@agy !" または "@agy <cmd>"
+    // コマンド判定: "!" または "@agy !" または "@bridge !"
     const cmdMatch = trimmed.match(/^(?:<@[A-Z0-9]+>\s*)?!([a-zA-Z0-9_-]+)(?:\s+([\s\S]*))?$/);
     if (!cmdMatch) {
       return false;
@@ -47,6 +47,71 @@ export class CommandRouter {
           channel: channelId,
           thread_ts: threadTs,
           text: SlackFormatter.formatHelp(),
+        });
+        return true;
+      }
+
+      case "agent": {
+        const available = agentRegistry.list().join(", ");
+        if (!args) {
+          await client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text: `利用可能な AI エージェント: \`${available}\` (例: \`!agent codex\` または \`!agent agy\`)`,
+          });
+          return true;
+        }
+
+        const requestedAgent = args.toLowerCase();
+        if (!agentRegistry.has(requestedAgent)) {
+          await client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text: SlackFormatter.formatError(
+              `未対応のエージェントです: \`${requestedAgent}\``,
+              `利用可能なエージェント: ${available}`,
+            ),
+          });
+          return true;
+        }
+
+        const session = sessionStore.getSessionByThread(channelId, threadTs);
+        if (session) {
+          if (session.status === "running" || agentRegistry.isRunning(threadKey)) {
+            await client.chat.postMessage({
+              channel: channelId,
+              thread_ts: threadTs,
+              text: "⚠️ 現在タスクが実行中のためエージェントを変更できません。",
+            });
+            return true;
+          }
+
+          if (session.conversationId && session.agentId !== requestedAgent) {
+            sessionStore.updateSession(session.threadKey, {
+              agentId: requestedAgent as any,
+              conversationId: undefined,
+            });
+            await client.chat.postMessage({
+              channel: channelId,
+              thread_ts: threadTs,
+              text: [
+                `🤖 *【エージェント変更完了】*`,
+                `このスレッドの実行エージェントを \`${requestedAgent}\` に切り替えました。`,
+                `※ 異なるエージェントへの切り替えに伴い、対話履歴（セッションID）をリセットしました。`,
+              ].join("\n"),
+            });
+            return true;
+          }
+
+          sessionStore.updateSession(session.threadKey, {
+            agentId: requestedAgent as any,
+          });
+        }
+
+        await client.chat.postMessage({
+          channel: channelId,
+          thread_ts: threadTs,
+          text: `🤖 *【エージェント設定完了】*\nこのスレッドの実行エージェントを \`${requestedAgent}\` に設定しました。`,
         });
         return true;
       }
@@ -76,11 +141,13 @@ export class CommandRouter {
             osUser,
           );
 
+          const existingSession = sessionStore.getSessionByThread(channelId, threadTs);
           sessionStore.createSession({
             channelId,
             threadTs,
             slackUserId,
             osUser,
+            agentId: existingSession?.agentId ?? "agy",
             repoName,
             branchName,
             worktreePath,
@@ -95,7 +162,8 @@ export class CommandRouter {
               `• *ブランチ*: \`${branchName}\``,
               `• *作業ツリー*: \`${worktreePath}\``,
               `• *OS ユーザー*: \`${osUser}\``,
-              `このスレッドで指示を入力すると、上記 Worktree 内で AGY が自律実行します。`,
+              `• *エージェント*: \`${existingSession?.agentId ?? "agy"}\``,
+              `このスレッドで指示を入力すると、上記 Worktree 内で自律実行します。`,
             ].join("\n"),
           });
         } catch (err) {
@@ -154,7 +222,7 @@ export class CommandRouter {
             repoName: session.repoName,
             branchName: session.branchName,
             commandText: prTitle,
-            metadata: { prUrl },
+            metadata: { prUrl, agentId: session.agentId },
           });
 
           await client.chat.postMessage({
@@ -239,18 +307,18 @@ export class CommandRouter {
         await client.chat.postMessage({
           channel: channelId,
           thread_ts: threadTs,
-          text: "🔄 *【対話履歴リセット】*\nこのスレッドの AGY 対話履歴（conversation_id）をクリアしました。次の指示は新規セッションとして開始されます。",
+          text: "🔄 *【対話履歴リセット】*\nこのスレッドの対話履歴（セッションID）をクリアしました。次の指示は新規セッションとして開始されます。",
         });
         return true;
       }
 
       case "cancel": {
-        const cancelled = privilegeRunner.cancel(threadKey);
+        const cancelled = agentRegistry.cancel(threadKey);
         if (cancelled) {
           await client.chat.postMessage({
             channel: channelId,
             thread_ts: threadTs,
-            text: "🛑 *【タスク停止】*\n実行中の AGY プロセスに停止シグナルを送信しました。",
+            text: "🛑 *【タスク停止】*\n実行中のプロセスに停止シグナルを送信しました。",
           });
         } else {
           await client.chat.postMessage({
@@ -269,3 +337,4 @@ export class CommandRouter {
 }
 
 export const commandRouter = new CommandRouter();
+

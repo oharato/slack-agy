@@ -30,7 +30,52 @@ describe("CommandRouter", () => {
 
     expect(handled).toBe(true);
     expect(mockPostMessage).toHaveBeenCalledTimes(1);
-    expect(mockPostMessage.mock.calls[0][0].text).toContain("Slack-AGY Bridge ヘルプ");
+    expect(mockPostMessage.mock.calls[0][0].text).toContain("Slack Agent Bridge ヘルプ");
+  });
+
+  it("should handle !agent command to switch agent and reset conversation", async () => {
+    sessionStore.createSession({
+      channelId: "C123",
+      threadTs: "1700.002",
+      slackUserId: "U_ALICE",
+      osUser: "alice",
+      agentId: "agy",
+      worktreePath: "/tmp/wt",
+      conversationId: "conv_agy_123",
+    });
+
+    const handled = await router.handleIfCommand({
+      client: mockClient,
+      channelId: "C123",
+      threadTs: "1700.002",
+      slackUserId: "U_ALICE",
+      osUser: "alice",
+      text: "!agent codex",
+    });
+
+    expect(handled).toBe(true);
+    expect(mockPostMessage).toHaveBeenCalledTimes(1);
+    expect(mockPostMessage.mock.calls[0][0].text).toContain("エージェント変更完了");
+    expect(mockPostMessage.mock.calls[0][0].text).toContain("codex");
+
+    const session = sessionStore.getSessionByThread("C123", "1700.002");
+    expect(session?.agentId).toBe("codex");
+    expect(session?.conversationId).toBeUndefined();
+  });
+
+  it("should reject unsupported agent in !agent command", async () => {
+    const handled = await router.handleIfCommand({
+      client: mockClient,
+      channelId: "C123",
+      threadTs: "1700.003",
+      slackUserId: "U_ALICE",
+      osUser: "alice",
+      text: "!agent unknown_agent",
+    });
+
+    expect(handled).toBe(true);
+    expect(mockPostMessage).toHaveBeenCalledTimes(1);
+    expect(mockPostMessage.mock.calls[0][0].text).toContain("未対応のエージェント");
   });
 
   it("should handle !status command", async () => {
@@ -73,6 +118,20 @@ describe("CommandRouter", () => {
     expect(session?.conversationId).toBeUndefined();
   });
 
+  it("should handle !cancel command", async () => {
+    const handled = await router.handleIfCommand({
+      client: mockClient,
+      channelId: "C123",
+      threadTs: "1700.001",
+      slackUserId: "U_ALICE",
+      osUser: "alice",
+      text: "!cancel",
+    });
+
+    expect(handled).toBe(true);
+    expect(mockPostMessage).toHaveBeenCalledTimes(1);
+  });
+
   it("should return false for regular natural language prompts", async () => {
     const handled = await router.handleIfCommand({
       client: mockClient,
@@ -87,3 +146,4 @@ describe("CommandRouter", () => {
     expect(mockPostMessage).not.toHaveBeenCalled();
   });
 });
+

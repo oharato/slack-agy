@@ -75,6 +75,7 @@ export class SessionStore {
       threadTs: params.threadTs,
       slackUserId: params.slackUserId,
       osUser: params.osUser,
+      agentId: params.agentId ?? "agy",
       repoName: params.repoName,
       branchName: params.branchName,
       worktreePath: params.worktreePath,

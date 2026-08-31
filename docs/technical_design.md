@@ -28,19 +28,28 @@ slack-agy/
 │   ├── functional_specification.md
 │   ├── technical_design.md
 │   ├── configuration_guide.md
-│   └── slack_app_setup.md
+│   ├── slack_app_setup.md
+│   └── platform_agent_abstraction_design.md
 ├── src/
 │   ├── index.ts              # アプリケーション起動エントリポイント
+│   ├── agent/                # マルチエージェント抽象化アダプタ (AGY / Codex CLI)
+│   │   ├── types.ts          # 正規化 AgentEvent, AgentAdapter インターフェース
+│   │   ├── agentRegistry.ts  # エージェントインスタンス管理 & ディスパッチ
+│   │   └── codex/
+│   │       ├── codexCliAdapter.ts   # OpenAI Codex CLI 実行アダプタ
+│   │       └── codexStreamParser.ts # JSONL ストリームパーサー
 │   ├── config/               # 環境設定・Zodバリデーション・ユーザーマッピング
 │   │   ├── env.ts
 │   │   ├── userMap.ts
 │   │   └── schema.ts
+│   ├── storage/              # SQLite 永続化 (DatabaseSync)
+│   │   └── sqliteStore.ts
 │   ├── logger/               # 構造化 JSONL ロガー & 監査ログ
 │   │   ├── logger.ts
 │   │   ├── auditLogger.ts
 │   │   ├── types.ts
 │   │   └── index.ts
-│   ├── session/              # スレッド ⇄ Worktree & Conversation ID 管理
+│   ├── session/              # スレッド ⇄ Worktree & Session ID 管理
 │   │   ├── sessionStore.ts
 │   │   └── types.ts
 │   ├── workspace/            # Git Worktree & 共有リポジトリ管理
@@ -48,8 +57,9 @@ slack-agy/
 │   │   ├── worktreeCleaner.ts # 放置 Worktree の定期 GC (TTL)
 │   │   ├── repoMutex.ts       # BaseRepo レベルの同時操作排他ロック
 │   │   └── gitUtils.ts
-│   ├── queue/                # 並行実行制限 & スレッド別 Mutex
-│   │   └── taskQueue.ts
+│   ├── queue/                # 並行実行制限 & Durable Job Queue
+│   │   ├── taskQueue.ts
+│   │   └── durableJobQueue.ts
 │   ├── runner/               # OSユーザー偽装 (sudo) & agy/gh 実行
 │   │   ├── privilegeRunner.ts
 │   │   ├── streamParser.ts
@@ -77,10 +87,36 @@ slack-agy/
 
 ---
 
-## 3. OS ユーザー権限スイッチング (`PrivilegeRunner`)
+## 3. マルチエージェント抽象化 (`AgentAdapter` & `AgentRegistry`)
 
-### 3.1 実行メカニズム
+Bridge はエージェント非依存の共通インターフェース `AgentAdapter` を提供し、`agy`（Google Antigravity）および `codex`（OpenAI Codex CLI）を透過的に実行します。
+
+```mermaid
+flowchart TD
+  Mention[Slack Mention / Message] --> Router[CommandRouter / Handler]
+  Router --> Reg[AgentRegistry]
+  Reg -->|agentId = agy| AA[AgyAdapter -> PrivilegeRunner]
+  Reg -->|agentId = codex| CA[CodexCliAdapter -> codex exec]
+  AA -->|stream-json| NP[Normalized AgentEvent]
+  CA -->|JSONL --json| NP
+  NP --> UI[SlackFormatter & ProgressCard]
+```
+
+### 3.1 共通イベントモデル (`AgentEvent`)
+エージェント固有のイベント（AGY stream-json, Codex JSONL）はコア層で次の統一イベントに正規化されます：
+- `started`: セッションIDを通知
+- `progress`: 思考ログまたは中間テキスト
+- `tool_call`: ツール名および引数
+- `completed`: 最終応答テキスト
+- `failed`: エラー詳細および再試行可否
+
+---
+
+## 4. OS ユーザー権限スイッチング (`PrivilegeRunner` / `CodexCliAdapter`)
+
+### 4.1 実行メカニズム
 Bridge プロセス（Node.js）は、Slack ユーザーに対応する Linux OS ユーザーのコンテキストでコマンドを実行するため、`sudo -u <os_user>` を用いてサブプロセスを生成します。
+
 
 ```mermaid
 flowchart LR

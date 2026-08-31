@@ -14,7 +14,9 @@
 | `SHARED_WORKSPACE_ROOT` | No | `/var/workspace/shared` | 共有ワークスペースのルートディレクトリ |
 | `DEFAULT_REPO` | No | `""` | 未指定時に使用するデフォルトリポジトリ名 |
 | `DEFAULT_BASE_BRANCH` | No | `main` | Worktree 作成時のベースブランチ |
+| `DEFAULT_AGENT` | No | `agy` | 未指定時に使用するデフォルト AI エージェント (`agy` / `codex`) |
 | `MAX_CONCURRENT_TASKS` | No | `2` | 同時に実行可能なタスク数の上限 |
+
 | `TASK_TIMEOUT_MS` | No | `600000` (10分) | 1タスクあたりのタイムアウト時間（ミリ秒） |
 | `DATA_DIR` | No | `./data` | セッション情報等の保存先ローカルディレクトリ |
 | `LOG_DIR` | No | `./logs` | 構造化ログ（`app.jsonl`, `audit.jsonl`）の保存先ディレクトリ |

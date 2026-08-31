@@ -1,5 +1,6 @@
 export interface ProgressCardParams {
   osUser: string;
+  agentId?: string;
   repoName?: string;
   branchName?: string;
   worktreePath: string;
@@ -12,15 +13,16 @@ export interface ProgressCardParams {
 
 export class ProgressCard {
   /**
-   * AGY 実行中のリアルタイム進捗カードテキストを生成
+   * エージェント実行中のリアルタイム進捗カードテキストを生成
    */
   public static render(params: ProgressCardParams): string {
     const elapsedSeconds = Math.round((Date.now() - params.startedAt) / 1000);
     const border = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    const agentLabel = (params.agentId || "AGY").toUpperCase();
 
     const lines: string[] = [
       border,
-      `⚙️ *AGY 実行中...* (OS User: \`${params.osUser}\` | 経過時間: ${elapsedSeconds}秒)`,
+      `⚙️ *${agentLabel} 実行中...* (OS User: \`${params.osUser}\` | 経過時間: ${elapsedSeconds}秒)`,
       border,
     ];
 
@@ -58,3 +60,4 @@ export class ProgressCard {
     return lines.join("\n");
   }
 }
+

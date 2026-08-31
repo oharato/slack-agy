@@ -150,6 +150,7 @@ describe("SlackFormatter", () => {
     const result = SlackFormatter.formatResultBlocks({
       response: tableResponse,
       osUser: "bob",
+      agentId: "codex",
       durationMs: 14200,
       branchName: "feat/table-display",
       conversationId: "conv_123456789",
@@ -182,12 +183,14 @@ describe("SlackFormatter", () => {
     const contextText = (lastBlock.elements as any[])[0].text;
     expect(contextText).toContain("👤 実行者: `bob`");
     expect(contextText).toContain("⏱️ 14.2s");
+    expect(contextText).toContain("🤖 `codex`");
     expect(contextText).toContain("🌿 `feat/table-display`");
   });
 
   it("should format help and status text", () => {
     const help = SlackFormatter.formatHelp();
     expect(help).toContain("!help");
+    expect(help).toContain("!agent");
     expect(help).toContain("!repo");
     expect(help).toContain("!pr");
     expect(help).toContain("!status");
@@ -197,6 +200,7 @@ describe("SlackFormatter", () => {
     expect(unauth).toContain("<@U12345>");
     expect(unauth).toContain("SLACK_USER_OS_MAPPINGS");
   });
+
 
   it("should optimize local file links in prepareMarkdownForSlack while keeping markdown structure", () => {
     const md = [

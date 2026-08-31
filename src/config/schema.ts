@@ -52,6 +52,7 @@ export const configSchema = z.object({
   SHARED_WORKSPACE_ROOT: z.string().default("/var/workspace/shared"),
   DEFAULT_REPO: z.string().default(""),
   DEFAULT_BASE_BRANCH: z.string().default("main"),
+  DEFAULT_AGENT: z.enum(["agy", "codex"]).default("agy"),
 
   // Task & Concurrency Control
   MAX_CONCURRENT_TASKS: z.coerce.number().int().positive().default(2),

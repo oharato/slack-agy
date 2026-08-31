@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { extractRepoFromPrompt, parseRepoTarget, sanitizeSlackLink } from "./repoUtils.js";
+import {
+  extractAgentFromPrompt,
+  extractPromptOptions,
+  extractRepoFromPrompt,
+  parseRepoTarget,
+  sanitizeSlackLink,
+} from "./repoUtils.js";
 
 describe("repoUtils", () => {
   it("should sanitize slack link markup", () => {
@@ -29,6 +35,28 @@ describe("repoUtils", () => {
     expect(res2.cleanedPrompt).toBe("最近のナレッジは？");
   });
 
+  it("should extract agent from agent: prefix", () => {
+    const res1 = extractAgentFromPrompt("agent:codex バグを直して");
+    expect(res1.agentId).toBe("codex");
+    expect(res1.cleanedPrompt).toBe("バグを直して");
+
+    const res2 = extractAgentFromPrompt("agent:AGY 調べて");
+    expect(res2.agentId).toBe("agy");
+    expect(res2.cleanedPrompt).toBe("調べて");
+  });
+
+  it("should extract both agent and repo from combined prompt options", () => {
+    const res1 = extractPromptOptions("agent:codex repo:my-service 型エラーを直して");
+    expect(res1.agentId).toBe("codex");
+    expect(res1.repoNameOrUrl).toBe("my-service");
+    expect(res1.cleanedPrompt).toBe("型エラーを直して");
+
+    const res2 = extractPromptOptions("repo:my-service agent:agy 調査して");
+    expect(res2.agentId).toBe("agy");
+    expect(res2.repoNameOrUrl).toBe("my-service");
+    expect(res2.cleanedPrompt).toBe("調査して");
+  });
+
   it("should extract repo from plain github URL", () => {
     const text = "https://github.com/oharato/my-service.git バグ直して";
     const res = extractRepoFromPrompt(text);
@@ -50,3 +78,4 @@ describe("repoUtils", () => {
     expect(t3.cloneUrl).toBe("docs-repo");
   });
 });
+
