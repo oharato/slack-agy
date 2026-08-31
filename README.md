@@ -35,6 +35,7 @@ pnpm run setup:all
 | **[3. 技術設計・実装詳細](./docs/technical_design.md)** | Node 24 LTS & TS 7、特権スイッチ（sudo）、BaseRepo Mutex、Worktree GC、Rate Limit 対策（800ms デバウンス）、JSONL 構造化ログ |
 | **[4. 設定・セキュリティ・環境構築](./docs/configuration_guide.md)** | 環境変数一覧、専用サービスユーザー (`slack-agy`)、厳格な sudoers 設定（root 昇格防止）、Worktree シークレット保護、systemd 自動起動 |
 | **[5. Slack App 設定ガイド](./docs/slack_app_setup.md)** | Slack App Manifest (YAML/JSON)、Socket Mode、OAuth Scopes (`files:write`, `reactions:write` 等)、Event Subscriptions |
+| **[6. プラットフォーム・エージェント抽象化設計](./docs/platform_agent_abstraction_design.md)** | Slack/AGY 依存を分離し、Codex CLI を含む任意のチャットツール・AIエージェントを差し替えるための設計と移行計画 |
 
 ---
 

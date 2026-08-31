@@ -72,7 +72,7 @@ slack-agy/
 │   ├── app.jsonl             # アプリケーション・イベントログ
 │   └── audit.jsonl           # セキュリティ・監査ログ
 └── data/                     # セッション永続化データディレクトリ (git-ignored)
-    └── sessions.json
+    └── bridge.sqlite          # Session / durable job state (SQLite WAL)
 ```
 
 ---
