@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { ProgressThrottler } from "./progressThrottler.js";
-import { MessageChunker } from "./messageChunker.js";
-import { ProgressCard } from "./progressCard.js";
-import { SlackFormatter } from "./slackFormatter.js";
-import type { SlackClient } from "../interaction/interactionManager.js";
+import { ProgressThrottler } from "../../src/formatter/progressThrottler.js";
+import { MessageChunker } from "../../src/formatter/messageChunker.js";
+import { ProgressCard } from "../../src/formatter/progressCard.js";
+import { SlackFormatter } from "../../src/formatter/slackFormatter.js";
+import type { SlackClient } from "../../src/interaction/interactionManager.js";
+
 
 describe("ProgressThrottler", () => {
   it("should throttle frequent updates to minimum interval", async () => {

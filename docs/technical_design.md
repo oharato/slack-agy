@@ -35,6 +35,8 @@ slack-agy/
 │   ├── agent/                # マルチエージェント抽象化アダプタ (AGY / Codex CLI)
 │   │   ├── types.ts          # 正規化 AgentEvent, AgentAdapter インターフェース
 │   │   ├── agentRegistry.ts  # エージェントインスタンス管理 & ディスパッチ
+│   │   ├── agy/
+│   │   │   └── agyAdapter.ts        # Google Antigravity (agy) 実行アダプタ
 │   │   └── codex/
 │   │       ├── codexCliAdapter.ts   # OpenAI Codex CLI 実行アダプタ
 │   │       └── codexStreamParser.ts # JSONL ストリームパーサー
@@ -64,26 +66,41 @@ slack-agy/
 │   │   ├── privilegeRunner.ts
 │   │   ├── streamParser.ts
 │   │   └── types.ts
-│   ├── interaction/          # スタンプ連携・ユーザー承認・質問待機管理
+│   ├── interaction/          # スタンプ・ボタン連携・ユーザー承認・質問待機管理
 │   │   ├── interactionManager.ts
+│   │   ├── optionDetector.ts  # 選択肢自動検出エンジン
 │   │   ├── types.ts
 │   │   └── index.ts
 │   ├── handlers/             # Slack イベントハンドラ & コマンドルーティング
 │   │   ├── mentionHandler.ts
 │   │   ├── messageHandler.ts
 │   │   ├── reactionHandler.ts
+│   │   ├── actionHandler.ts   # Block Kit ボタンアクションハンドラ
+│   │   ├── agentExecutor.ts   # エージェント実行・継続対話ループ統合
 │   │   └── commandRouter.ts
 │   └── formatter/            # Slack Block Kit / Markdown 変換 & Rate Limit 制御
 │       ├── progressThrottler.ts # 800ms デバウンス進捗更新 (Rate Limit 対策)
 │       ├── messageChunker.ts    # 4,000 文字制限フォールバック & ファイル化
 │       ├── slackFormatter.ts
 │       └── progressCard.ts
+├── tests/                    # 単体・結合テストスイート (src と並列配置)
+│   ├── agent/                # エージェント & レジストリテスト
+│   ├── config/               # 設定 & ユーザーマッピングテスト
+│   ├── formatter/            # フォーマッタ & スロットラーテスト
+│   ├── handlers/             # 各種ハンドラ & Executor テスト
+│   ├── interaction/          # 承認 & 選択肢検出テスト
+│   ├── logger/               # 構造化ログテスト
+│   ├── queue/                # タスクキュー & Durable Job テスト
+│   ├── runner/               # PrivilegeRunner テスト
+│   ├── session/              # SQLite セッションストアテスト
+│   └── workspace/            # Worktree & Mutex テスト
 ├── logs/                     # 構造化ログ出力ディレクトリ (git-ignored)
 │   ├── app.jsonl             # アプリケーション・イベントログ
 │   └── audit.jsonl           # セキュリティ・監査ログ
 └── data/                     # セッション永続化データディレクトリ (git-ignored)
     └── bridge.sqlite          # Session / durable job state (SQLite WAL)
 ```
+
 
 ---
 

@@ -4,10 +4,11 @@ import path from "node:path";
 import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { RepoMutex } from "./repoMutex.js";
-import { WorktreeCleaner } from "./worktreeCleaner.js";
-import { WorktreeManager } from "./worktreeManager.js";
-import { GitUtils } from "./gitUtils.js";
+import { RepoMutex } from "../../src/workspace/repoMutex.js";
+import { WorktreeCleaner } from "../../src/workspace/worktreeCleaner.js";
+import { WorktreeManager } from "../../src/workspace/worktreeManager.js";
+import { GitUtils } from "../../src/workspace/gitUtils.js";
+
 
 const execFileAsync = promisify(execFile);
 

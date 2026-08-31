@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { Logger } from "./logger.js";
-import { AuditLogger } from "./auditLogger.js";
+import { Logger } from "../../src/logger/logger.js";
+import { AuditLogger } from "../../src/logger/auditLogger.js";
+
 
 describe("Structured JSONL Logger", () => {
   let tmpDir: string;

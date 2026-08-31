@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { registerMentionHandler } from "./mentionHandler.js";
-import { UserMapper } from "../config/userMap.js";
-import { sessionStore } from "../session/sessionStore.js";
-import { agentRegistry } from "../agent/agentRegistry.js";
-import type { AppConfig } from "../config/schema.js";
+import { registerMentionHandler } from "../../src/handlers/mentionHandler.js";
+import { UserMapper } from "../../src/config/userMap.js";
+import { sessionStore } from "../../src/session/sessionStore.js";
+import { agentRegistry } from "../../src/agent/agentRegistry.js";
+import type { AppConfig } from "../../src/config/schema.js";
+
 
 describe("mentionHandler", () => {
   let mockApp: any;
