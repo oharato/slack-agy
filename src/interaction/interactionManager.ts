@@ -5,6 +5,8 @@ import {
   InteractionResult,
   RequestApprovalParams,
   RequestQuestionParams,
+  RegisterMessageChoicesParams,
+  RegisteredMessageChoice,
   NUMBER_EMOJIS,
 } from "./types.js";
 import { logger } from "../logger/index.js";
@@ -14,6 +16,7 @@ export type SlackClient = App["client"];
 
 export class InteractionManager {
   private pendingInteractions = new Map<string, PendingInteraction>();
+  private registeredChoices = new Map<string, RegisteredMessageChoice>();
 
   private getKey(channelId: string, messageTs: string): string {
     return `${channelId}:${messageTs}`;
@@ -57,7 +60,7 @@ export class InteractionManager {
       `⚠️ *【確認・許可要求】* <@${allowedSlackUserId}>`,
       `*${title}*`,
       description ? `\n> ${description.replace(/\n/g, "\n> ")}\n` : "",
-      `👇 下のスタンプを押して回答してください：`,
+      `👇 下のスタンプまたはボタンを押して回答してください：`,
       `  • ✅ (\`:white_check_mark:\`) : 許可して続行`,
       `  • ❌ (\`:x:\`) : 拒否して中止`,
     ]
@@ -209,7 +212,7 @@ export class InteractionManager {
           await client.chat.update({
             channel: channelId,
             ts: messageTs,
-            text: `⏱️ *【タイムアウト】* 質問への回答がありません過したため、スキップしました。`,
+            text: `⏱️ *【タイムアウト】* 質問への回答がありませんでした。`,
           });
         } catch (err) {
           logger.error("failed_to_update_timeout_message", err);
@@ -251,6 +254,52 @@ export class InteractionManager {
   }
 
   /**
+   * エージェント完了メッセージに含まれる選択肢を登録し、スタンプを自動付与
+   */
+  public async registerMessageChoices(
+    client: SlackClient,
+    params: RegisterMessageChoicesParams,
+  ): Promise<void> {
+    const { channelId, messageTs, options, threadTs, allowedSlackUserId, osUser, agentId, title, onSelect } =
+      params;
+    const key = this.getKey(channelId, messageTs);
+
+    this.registeredChoices.set(key, {
+      channelId,
+      threadTs,
+      messageTs,
+      allowedSlackUserId,
+      osUser,
+      agentId,
+      title,
+      options,
+      createdAt: Date.now(),
+      onSelect,
+    });
+
+    logger.info("message_choices_registered", {
+      key,
+      channelId,
+      messageTs,
+      allowedSlackUserId,
+      optionsCount: options.length,
+    });
+
+    // メッセージに選択肢スタンプを順番に付与
+    for (const opt of options) {
+      try {
+        await client.reactions.add({
+          channel: channelId,
+          timestamp: messageTs,
+          name: opt.emoji,
+        });
+      } catch (err) {
+        logger.warn("failed_to_add_message_choice_reaction", { emoji: opt.emoji, error: String(err) });
+      }
+    }
+  }
+
+  /**
    * reaction_added イベント受信時の処理ハンドラ
    */
   public async handleReactionAdded(
@@ -266,93 +315,196 @@ export class InteractionManager {
     }
 
     const key = this.getKey(event.item.channel, event.item.ts);
+
+    // 1. 同期待機中のインタラクション (PendingInteraction) をチェック
     const pending = this.pendingInteractions.get(key);
-
-    if (!pending) {
-      return false;
-    }
-
-    // 実行許可者本人のスタンプかチェック
-    if (event.user !== pending.allowedSlackUserId) {
-      logger.debug("reaction_from_unauthorized_user_ignored", {
-        expectedUser: pending.allowedSlackUserId,
-        actualUser: event.user,
-      });
-      return false;
-    }
-
-    // 押されたリアクションに対応する選択肢を検索
-    const matchedOption = pending.options.find(
-      (opt) => opt.emoji === event.reaction || opt.displayEmoji === event.reaction,
-    );
-
-    if (!matchedOption) {
-      return false;
-    }
-
-    // 有効な回答を受理 -> タイマークリア & マップから削除
-    clearTimeout(pending.timerId);
-    this.pendingInteractions.delete(key);
-
-    const respondedAt = new Date().toISOString();
-    const result: InteractionResult = {
-      interactionId: pending.id,
-      selectedOption: matchedOption,
-      selectedByUserId: event.user,
-      respondedAt,
-      timedOut: false,
-    };
-
-    logger.info("interaction_answered", {
-      interactionId: pending.id,
-      type: pending.type,
-      selectedOption: matchedOption.value,
-      userId: event.user,
-      osUser: pending.osUser,
-    });
-
-    auditLogger.record({
-      traceId: pending.id,
-      action: "privilege_switch",
-      status: matchedOption.isApproval === false ? "CANCELLED" : "SUCCESS",
-      slackUserId: event.user,
-      osUser: pending.osUser,
-      channelId: pending.channelId,
-      threadTs: pending.threadTs,
-      commandText: `${pending.type}:${matchedOption.value}`,
-      metadata: {
-        title: pending.title,
-        selectedLabel: matchedOption.label,
-      },
-    });
-
-    // Slack メッセージを決定状態に更新
-    try {
-      if (pending.type === "approval") {
-        const isApproved = matchedOption.value === "approve";
-        const statusText = isApproved
-          ? `✅ *【許可済み】* <@${event.user}> が実行を許可しました。\n> *${pending.title}*\n処理を続行します...`
-          : `❌ *【拒否・中止】* <@${event.user}> が実行を拒否しました。\n> *${pending.title}*\nこの操作はスキップされました。`;
-
-        await client.chat.update({
-          channel: pending.channelId,
-          ts: pending.messageTs,
-          text: statusText,
+    if (pending) {
+      if (event.user !== pending.allowedSlackUserId) {
+        logger.debug("reaction_from_unauthorized_user_ignored", {
+          expectedUser: pending.allowedSlackUserId,
+          actualUser: event.user,
         });
-      } else {
-        await client.chat.update({
-          channel: pending.channelId,
-          ts: pending.messageTs,
-          text: `✔ *【回答選択】* <@${event.user}> が選択しました：\n*${matchedOption.displayEmoji} ${matchedOption.label}*\n処理を続行します...`,
-        });
+        return false;
       }
-    } catch (err) {
-      logger.error("failed_to_update_answered_message", err);
+
+      const matchedOption = pending.options.find(
+        (opt) => opt.emoji === event.reaction || opt.displayEmoji === event.reaction,
+      );
+
+      if (!matchedOption) return false;
+
+      clearTimeout(pending.timerId);
+      this.pendingInteractions.delete(key);
+
+      const respondedAt = new Date().toISOString();
+      const result: InteractionResult = {
+        interactionId: pending.id,
+        selectedOption: matchedOption,
+        selectedByUserId: event.user,
+        respondedAt,
+        timedOut: false,
+      };
+
+      logger.info("interaction_answered", {
+        interactionId: pending.id,
+        type: pending.type,
+        selectedOption: matchedOption.value,
+        userId: event.user,
+        osUser: pending.osUser,
+      });
+
+      auditLogger.record({
+        traceId: pending.id,
+        action: "privilege_switch",
+        status: matchedOption.isApproval === false ? "CANCELLED" : "SUCCESS",
+        slackUserId: event.user,
+        osUser: pending.osUser,
+        channelId: pending.channelId,
+        threadTs: pending.threadTs,
+        commandText: `${pending.type}:${matchedOption.value}`,
+        metadata: {
+          title: pending.title,
+          selectedLabel: matchedOption.label,
+        },
+      });
+
+      try {
+        if (pending.type === "approval") {
+          const isApproved = matchedOption.value === "approve";
+          const statusText = isApproved
+            ? `✅ *【許可済み】* <@${event.user}> が実行を許可しました。\n> *${pending.title}*\n処理を続行します...`
+            : `❌ *【拒否・中止】* <@${event.user}> が実行を拒否しました。\n> *${pending.title}*\nこの操作はスキップされました。`;
+
+          await client.chat.update({
+            channel: pending.channelId,
+            ts: pending.messageTs,
+            text: statusText,
+          });
+        } else {
+          await client.chat.update({
+            channel: pending.channelId,
+            ts: pending.messageTs,
+            text: `✔ *【回答選択】* <@${event.user}> が選択しました：\n*${matchedOption.displayEmoji} ${matchedOption.label}*\n処理を続行します...`,
+          });
+        }
+      } catch (err) {
+        logger.error("failed_to_update_answered_message", err);
+      }
+
+      pending.resolve(result);
+      return true;
     }
 
-    // Promise を解決して AGY 待機ルーチンに結果を返す
-    pending.resolve(result);
-    return true;
+    // 2. 完了メッセージに付与された非同期選択肢 (RegisteredMessageChoice) をチェック
+    const registered = this.registeredChoices.get(key);
+    if (registered) {
+      if (event.user !== registered.allowedSlackUserId) {
+        logger.debug("choice_reaction_from_unauthorized_user_ignored", {
+          expectedUser: registered.allowedSlackUserId,
+          actualUser: event.user,
+        });
+        return false;
+      }
+
+      const matchedOption = registered.options.find(
+        (opt) => opt.emoji === event.reaction || opt.displayEmoji === event.reaction,
+      );
+
+      if (!matchedOption) return false;
+
+      // 重複選択を防ぐため登録から削除
+      this.registeredChoices.delete(key);
+
+      logger.info("message_choice_selected", {
+        key,
+        userId: event.user,
+        selectedOption: matchedOption.value,
+        label: matchedOption.label,
+      });
+
+      if (registered.onSelect) {
+        await registered.onSelect(matchedOption, event.user);
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Block Kit ボタン押下イベントのハンドラ
+   */
+  public async handleBlockAction(
+    client: SlackClient,
+    body: {
+      user: { id: string };
+      channel?: { id: string };
+      container?: { message_ts?: string; channel_id?: string };
+      message?: { ts: string };
+    },
+    action: { action_id: string; value: string },
+  ): Promise<boolean> {
+    const channelId = body.channel?.id || body.container?.channel_id;
+    const messageTs = body.message?.ts || body.container?.message_ts;
+    const userId = body.user.id;
+
+    if (!channelId || !messageTs) return false;
+
+    const key = this.getKey(channelId, messageTs);
+
+    // 1. 同期待機中のインタラクション
+    const pending = this.pendingInteractions.get(key);
+    if (pending) {
+      if (userId !== pending.allowedSlackUserId) return false;
+
+      const matchedOption = pending.options.find((opt) => opt.value === action.value);
+      if (!matchedOption) return false;
+
+      clearTimeout(pending.timerId);
+      this.pendingInteractions.delete(key);
+
+      const respondedAt = new Date().toISOString();
+      const result: InteractionResult = {
+        interactionId: pending.id,
+        selectedOption: matchedOption,
+        selectedByUserId: userId,
+        respondedAt,
+        timedOut: false,
+      };
+
+      try {
+        await client.chat.update({
+          channel: pending.channelId,
+          ts: pending.messageTs,
+          text: `✔ *【ボタン選択】* <@${userId}> が選択しました：\n*${matchedOption.displayEmoji} ${matchedOption.label}*\n処理を続行します...`,
+        });
+      } catch (err) {
+        logger.error("failed_to_update_action_answered_message", err);
+      }
+
+      pending.resolve(result);
+      return true;
+    }
+
+    // 2. 完了メッセージの選択肢
+    const registered = this.registeredChoices.get(key);
+    if (registered) {
+      if (userId !== registered.allowedSlackUserId) return false;
+
+      const matchedOption = registered.options.find((opt) => opt.value === action.value);
+      if (!matchedOption) return false;
+
+      this.registeredChoices.delete(key);
+
+      if (registered.onSelect) {
+        await registered.onSelect(matchedOption, userId);
+      }
+
+      return true;
+    }
+
+    return false;
   }
 }
 

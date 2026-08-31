@@ -6,12 +6,10 @@ import { sessionStore } from "../session/sessionStore.js";
 import { worktreeManager } from "../workspace/worktreeManager.js";
 import { extractPromptOptions } from "../workspace/repoUtils.js";
 import { agentRegistry } from "../agent/agentRegistry.js";
-import { taskQueue } from "../queue/taskQueue.js";
-import { ProgressThrottler } from "../formatter/progressThrottler.js";
-import { ProgressCard } from "../formatter/progressCard.js";
+import { AgentExecutor } from "./agentExecutor.js";
 import { SlackFormatter } from "../formatter/slackFormatter.js";
-import { MessageChunker } from "../formatter/messageChunker.js";
 import { logger } from "../logger/index.js";
+
 
 export interface MentionHandlerOptions {
   userMapper: UserMapper;
@@ -194,148 +192,16 @@ export function registerMentionHandler(app: App, options: MentionHandlerOptions)
     }
 
     const currentSession = session!;
-    const threadKey = currentSession.threadKey;
-    const runningAgentId = currentSession.agentId || effectiveAgent;
 
-    // 6. 受付メッセージの投稿
-    const initialMsg = await client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text: `⏳ *${runningAgentId.toUpperCase()} タスクを受け付けました...* (準備中)`,
+    // 6. AgentExecutor 経由でタスクを実行 (進捗表示、結果フォーマット、選択肢自動登録・連携)
+    await AgentExecutor.executeAgentTurn({
+      client,
+      session: currentSession,
+      prompt,
+      slackUserId,
+      config,
     });
 
-    const progressMsgTs = initialMsg.ts;
-    if (!progressMsgTs) {
-      logger.error("missing_progress_message_ts");
-      return;
-    }
-
-    // 7. TaskQueue 経由でエージェントプロセスを実行
-    await taskQueue.enqueue(threadKey, async () => {
-      sessionStore.updateSession(threadKey, { status: "running" });
-
-      const throttler = new ProgressThrottler(client, {
-        channelId,
-        messageTs: progressMsgTs,
-        minIntervalMs: config.PROGRESS_THROTTLE_MS,
-      });
-
-      const startedAt = Date.now();
-      const recentTools: string[] = [];
-      let activeTool: string | undefined;
-      let reasoningSnippet: string | undefined;
-
-      try {
-        const agent = agentRegistry.get(runningAgentId);
-        const agentResult = await agent.run({
-          taskId: threadKey,
-          prompt,
-          cwd: currentSession.worktreePath,
-          osUser: currentSession.osUser,
-          sessionId: currentSession.conversationId,
-          timeoutMs: config.TASK_TIMEOUT_MS,
-          onEvent: (event) => {
-            if (event.type === "tool_call") {
-              activeTool = event.name;
-              if (!recentTools.includes(event.name)) recentTools.push(event.name);
-            } else if (event.type === "progress") {
-              activeTool = undefined;
-              reasoningSnippet = event.text;
-            }
-            throttler.update(
-              ProgressCard.render({
-                osUser: currentSession.osUser,
-                agentId: runningAgentId,
-                repoName: currentSession.repoName,
-                branchName: currentSession.branchName,
-                worktreePath: currentSession.worktreePath,
-                startedAt,
-                reasoningSnippet,
-                activeTool,
-                recentTools,
-                lastUpdateSnippet: event.type === "progress" ? event.text.slice(0, 150) : undefined,
-              }),
-            );
-          },
-        });
-
-        // スロットラーをキャンセル（完了通知を直ちに送るため）
-        throttler.cancel();
-
-        // セッションの conversationId を保存
-        sessionStore.updateSession(threadKey, {
-          status: "idle",
-          conversationId: agentResult.sessionId || currentSession.conversationId,
-        });
-
-        const formattedBlocks = SlackFormatter.formatResultBlocks({
-          response: agentResult.response || "実行が完了しました。",
-          osUser: currentSession.osUser,
-          agentId: runningAgentId,
-          durationMs: agentResult.durationMs,
-          branchName: currentSession.branchName,
-          conversationId: agentResult.sessionId,
-          showPrHint: Boolean(currentSession.repoName),
-        });
-
-        const chunked = MessageChunker.processMessage(formattedBlocks.text, {
-          defaultFilename: `${runningAgentId}_result.txt`,
-          title: currentSession.branchName
-            ? `${runningAgentId.toUpperCase()} 実行結果 (${currentSession.branchName})`
-            : `${runningAgentId.toUpperCase()} 実行結果`,
-        });
-
-        if (chunked.type === "file") {
-          try {
-            await client.chat.update({
-              channel: channelId,
-              ts: progressMsgTs,
-              text: `✅ *${runningAgentId.toUpperCase()} 実行完了* (${(agentResult.durationMs / 1000).toFixed(1)}s)\n\n${chunked.previewText || "文字数制限超過のため結果をファイル添付しました。"}`,
-            });
-          } catch {
-            // ignore
-          }
-
-          // files.uploadV2 でスニペットファイルをアップロード
-          await client.files.uploadV2({
-            channel_id: channelId,
-            thread_ts: threadTs,
-            content: chunked.content,
-            filename: chunked.filename,
-            title: chunked.title,
-          });
-        } else {
-          try {
-            await client.chat.update({
-              channel: channelId,
-              ts: progressMsgTs,
-              text: formattedBlocks.text,
-              blocks: formattedBlocks.blocks as any,
-            });
-          } catch (updateErr) {
-            logger.warn("failed_to_update_progress_msg_posting_new", { error: String(updateErr) });
-            await client.chat.postMessage({
-              channel: channelId,
-              thread_ts: threadTs,
-              text: formattedBlocks.text,
-              blocks: formattedBlocks.blocks as any,
-            });
-          }
-        }
-      } catch (err) {
-        throttler.cancel();
-        sessionStore.updateSession(threadKey, { status: "idle" });
-
-        logger.error("error_during_agent_execution", err, { threadKey, agentId: runningAgentId });
-        await client.chat.update({
-          channel: channelId,
-          ts: progressMsgTs,
-          text: SlackFormatter.formatError(
-            `${runningAgentId.toUpperCase()} の実行中にエラーが発生しました`,
-            String(err),
-          ),
-        });
-      }
-    });
   });
 }
+
